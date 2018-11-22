@@ -40,11 +40,13 @@
 #include "gatresult.h"
 
 #include "atmodem.h"
+#include "vendor.h"
 
 static const char *none_prefix[] = { NULL };
 
 struct lte_driver_data {
 	GAtChat *chat;
+	int vendor;
 	struct ofono_lte_default_attach_info pending_info;
 };
 
@@ -109,7 +111,8 @@ static void at_lte_set_default_attach_info(const struct ofono_lte *lte,
 {
 	struct lte_driver_data *ldd = ofono_lte_get_data(lte);
 	struct cb_data *cbd = cb_data_new(cb, data);
-	char *buf = at_util_get_cgdcont_command(0, info->proto, info->apn);
+	int cid = (ldd->vendor == OFONO_VENDOR_GEMALTO) ? 1 : 0;
+	char *buf = at_util_get_cgdcont_command(cid, info->proto, info->apn);
 
 	cbd->user = ldd;
 	memcpy(&ldd->pending_info, info, sizeof(ldd->pending_info));
@@ -146,6 +149,7 @@ static int at_lte_probe(struct ofono_lte *lte, unsigned int vendor, void *data)
 		return -ENOMEM;
 
 	ldd->chat = g_at_chat_clone(chat);
+	ldd->vendor = vendor;
 
 	ofono_lte_set_data(lte, ldd);
 

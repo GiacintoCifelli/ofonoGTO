@@ -1297,7 +1297,7 @@ static DBusMessage *pri_set_property(DBusConnection *conn,
 		if (ctx->gprs->flags & GPRS_FLAG_ATTACHING)
 			return __ofono_error_attach_in_progress(msg);
 
-		if (value && assign_context(ctx, 0) == FALSE)
+		if (value && assign_context(ctx, ctx->id) == FALSE)
 			return __ofono_error_not_implemented(msg);
 
 		gc = ctx->context_driver;
