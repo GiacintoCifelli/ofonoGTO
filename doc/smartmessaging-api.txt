@@ -22,6 +22,14 @@ Methods		object SendAppointment(string to, array{bytes} appointment)
 			it is fragmented as appropriate.  This method call
 			returns the object path of the queued SMS.
 
+		object SendPdu(string to, array{bytes} pdu)
+
+			Sends a pdu object to the number in to. The
+			pdu object is not interpreted by oFono in any way.
+			If the object is too large to fit into a single SMS,
+			it is fragmented as appropriate.  This method call
+			returns the object path of the queued SMS.
+
 		void RegisterAgent(object path)
 
 			Registers an agent which will be called whenever a
@@ -51,6 +59,15 @@ Methods		void ReceiveAppointment(array{byte} appointment, dict info)
 
 			Requests the agent to process a new SMS that has
 			arrived containing a vCard object.  The info
+			dictionary contains 'Sender', 'LocalSentTime' and
+			'SentTime' properties.
+
+			Possible Errors: None
+
+		void ReceivePdu(array{byte} pdu, dict info)
+
+			Requests the agent to process a new SMS that has
+			arrived containing a pdu object.  The info
 			dictionary contains 'Sender', 'LocalSentTime' and
 			'SentTime' properties.
 

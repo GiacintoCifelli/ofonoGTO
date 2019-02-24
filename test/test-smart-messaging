@@ -40,6 +40,15 @@ class SmartMessagingAgent(dbus.service.Object):
 		print("Received Appointment:")
 		print(string)
 
+	@dbus.service.method("org.ofono.SmartMessagingAgent",
+				in_signature="aya{sv}", out_signature="")
+	def ReceivePdu(self, data, props):
+		for key in props.keys():
+			print("Key: %s, Value: %s" % (key, props[key]))
+
+		print("Received Pdu:")
+		print(bytearray(data).hex())
+
 if __name__ == '__main__':
 	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 

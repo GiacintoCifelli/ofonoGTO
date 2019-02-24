@@ -1333,8 +1333,8 @@ static void sms_dispatch(struct ofono_sms *sms, GSList *sms_list)
 	struct ofono_uuid uuid;
 	enum sms_charset uninitialized_var(old_charset);
 	enum sms_class cls;
-	int srcport = -1;
-	int dstport = -1;
+	int srcport = NO_PORT;
+	int dstport = NO_PORT;
 
 	DBG("");
 
@@ -1359,8 +1359,8 @@ static void sms_dispatch(struct ofono_sms *sms, GSList *sms_list)
 		guint8 dcs;
 		gboolean comp = FALSE;
 		enum sms_charset charset;
-		int cdst = -1;
-		int csrc = -1;
+		int cdst = NO_PORT;
+		int csrc = NO_PORT;
 		gboolean is_8bit;
 
 		s = l->data;
@@ -1416,11 +1416,15 @@ static void sms_dispatch(struct ofono_sms *sms, GSList *sms_list)
 		unsigned char *buf;
 		long len;
 
-		if (srcport == -1 || dstport == -1) {
-			ofono_error("Got an 8-bit encoded message, however "
-					"no valid src/address port, ignore");
-			return;
-		}
+		// TODO: verify if needed or removed intentionally
+		// Volvo explanation:
+		// for special purposes, the srcport and dstports are not set:
+		// the test should be skipped.
+		//if (srcport == NO_PORT || dstport == NO_PORT) {
+		//	ofono_error("Got an 8-bit encoded message, however "
+		//			"no valid src/address port, ignore");
+		//	return;
+		//}
 
 		buf = sms_decode_datagram(sms_list, &len);
 		if (buf == NULL)

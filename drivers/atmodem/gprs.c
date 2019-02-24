@@ -4,6 +4,7 @@
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
  *  Copyright (C) 2010  ST-Ericsson AB.
+ *  Copyright (C) 2018 Gemalto M2M
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -34,6 +35,7 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/gprs.h>
+#include <common.h>
 
 #include "gatchat.h"
 #include "gatresult.h"
@@ -42,6 +44,8 @@
 #include "vendor.h"
 
 static const char *cgreg_prefix[] = { "+CGREG:", NULL };
+static const char *cereg_prefix[] = { "+CEREG:", NULL };
+static const char *c5greg_prefix[] = { "+C5GREG:", NULL };
 static const char *cgdcont_prefix[] = { "+CGDCONT:", NULL };
 static const char *none_prefix[] = { NULL };
 
@@ -50,7 +54,23 @@ struct gprs_data {
 	unsigned int vendor;
 	unsigned int last_auto_context_id;
 	gboolean telit_try_reattach;
+	gboolean has_cgreg;
+	gboolean has_cereg;
+	gboolean has_c5greg;
+	gboolean nb_inds;
+	gboolean auto_attach; /* for LTE modems & co */
 	int attached;
+	int cgreg_status;
+	int cereg_status;
+	int c5greg_status;
+};
+
+struct netreg_info {
+	struct ofono_gprs *gprs;
+	struct gprs_data *gd;
+	const char *ind;
+	int status;
+	int bearer;
 };
 
 static void at_cgatt_cb(gboolean ok, GAtResult *result, gpointer user_data)
@@ -68,9 +88,15 @@ static void at_gprs_set_attached(struct ofono_gprs *gprs, int attached,
 					ofono_gprs_cb_t cb, void *data)
 {
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
-	struct cb_data *cbd = cb_data_new(cb, data);
+	struct cb_data *cbd;
 	char buf[64];
 
+	if (gd->auto_attach) {
+		CALLBACK_WITH_SUCCESS(cb, data);
+		return;
+	}
+
+	cbd = cb_data_new(cb, data);
 	snprintf(buf, sizeof(buf), "AT+CGATT=%i", attached ? 1 : 0);
 
 	if (g_at_chat_send(gd->chat, buf, none_prefix,
@@ -91,21 +117,104 @@ static void at_cgreg_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	struct ofono_error error;
 	int status;
 	struct gprs_data *gd = cbd->user;
+	gboolean last = !(gd->has_cereg || gd->has_c5greg);
 
 	decode_at_error(&error, g_at_result_final_response(result));
 
 	if (!ok) {
-		cb(&error, -1, cbd->data);
-		return;
+		status = -1;
+		goto end;
 	}
 
 	if (at_util_parse_reg(result, "+CGREG:", NULL, &status,
 				NULL, NULL, NULL, gd->vendor) == FALSE) {
-		CALLBACK_WITH_FAILURE(cb, -1, cbd->data);
-		return;
+		error.type = OFONO_ERROR_TYPE_FAILURE;
+		error.error = 0;
+		status = -1;
+		goto end;
 	}
 
-	cb(&error, status, cbd->data);
+end:
+	gd->cgreg_status = status;
+
+	if (last)
+		cb(&error, status, cbd->data);
+}
+
+static void at_cereg_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	ofono_gprs_status_cb_t cb = cbd->cb;
+	struct ofono_error error;
+	int status;
+	struct gprs_data *gd = cbd->user;
+	gboolean last = !gd->has_c5greg;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	if (!ok) {
+		status = -1;
+		goto end;
+	}
+
+	if (at_util_parse_reg(result, "+CEREG:", NULL, &status,
+				NULL, NULL, NULL, gd->vendor) == FALSE) {
+		error.type = OFONO_ERROR_TYPE_FAILURE;
+		error.error = 0;
+		status = -1;
+		goto end;
+	}
+
+end:
+	gd->cereg_status = status;
+
+	if (last) {
+
+		if (/*gd->cgreg_status == NETWORK_REGISTRATION_STATUS_DENIED ||*/
+			gd->cgreg_status == NETWORK_REGISTRATION_STATUS_REGISTERED ||
+			gd->cgreg_status == NETWORK_REGISTRATION_STATUS_ROAMING)
+			cb(&error, gd->cgreg_status, cbd->data);
+		else
+			cb(&error, status, cbd->data);
+	}
+}
+
+static void at_c5greg_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	ofono_gprs_status_cb_t cb = cbd->cb;
+	struct ofono_error error;
+	int status;
+	struct gprs_data *gd = cbd->user;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	if (!ok) {
+		status = -1;
+		goto end;
+	}
+
+	if (at_util_parse_reg(result, "+C5GREG:", NULL, &status,
+				NULL, NULL, NULL, gd->vendor) == FALSE) {
+		error.type = OFONO_ERROR_TYPE_FAILURE;
+		error.error = 0;
+		status = -1;
+		goto end;
+	}
+
+end:
+	gd->c5greg_status = status;
+
+	if (/*gd->cgreg_status == NETWORK_REGISTRATION_STATUS_DENIED ||*/
+			gd->cgreg_status == NETWORK_REGISTRATION_STATUS_REGISTERED ||
+			gd->cgreg_status == NETWORK_REGISTRATION_STATUS_ROAMING)
+		cb(&error, gd->cgreg_status, cbd->data);
+	else if (/*gd->cereg_status == NETWORK_REGISTRATION_STATUS_DENIED ||*/
+			gd->cereg_status == NETWORK_REGISTRATION_STATUS_REGISTERED ||
+			gd->cereg_status == NETWORK_REGISTRATION_STATUS_ROAMING)
+		cb(&error, gd->cereg_status, cbd->data);
+	else
+		cb(&error, status, cbd->data);
 }
 
 static void at_gprs_registration_status(struct ofono_gprs *gprs,
@@ -113,9 +222,6 @@ static void at_gprs_registration_status(struct ofono_gprs *gprs,
 					void *data)
 {
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
-	struct cb_data *cbd = cb_data_new(cb, data);
-
-	cbd->user = gd;
 
 	switch (gd->vendor) {
 	case OFONO_VENDOR_GOBI:
@@ -136,13 +242,51 @@ static void at_gprs_registration_status(struct ofono_gprs *gprs,
 		break;
 	}
 
-	if (g_at_chat_send(gd->chat, "AT+CGREG?", cgreg_prefix,
-				at_cgreg_cb, cbd, g_free) > 0)
-		return;
+	/*
+	 * this is long: send all indicators, compare at the end if one reports
+	 * attached and use it, otherwise report status for last indicator
+	 * tested (higher technology).
+	 * Note: AT+CGATT? is not good because doesn't tell us if we are roaming
+	 */
+	if (gd->has_cgreg) {
+		struct cb_data *cbd = cb_data_new(cb, data);
+		cbd->user = gd;
+		gd->cgreg_status = -1; /* preset in case of fail of the at send */
 
-	g_free(cbd);
+		/* g_at_chat_send fails only if g_new_try fails, so we stop */
+		if (g_at_chat_send(gd->chat, "AT+CGREG?", cgreg_prefix,
+					at_cgreg_cb, cbd, g_free) == 0) {
+			g_free(cbd);
+			CALLBACK_WITH_FAILURE(cb, -1, data);
+			return;
+		}
+	}
 
-	CALLBACK_WITH_FAILURE(cb, -1, data);
+	if (gd->has_cereg) {
+		struct cb_data *cbd = cb_data_new(cb, data);
+		cbd->user = gd;
+		gd->cereg_status = -1;
+
+		if (g_at_chat_send(gd->chat, "AT+CEREG?", cereg_prefix,
+					at_cereg_cb, cbd, g_free) == 0) {
+			g_free(cbd);
+			CALLBACK_WITH_FAILURE(cb, -1, data);
+			return;
+		}
+	}
+
+	if (gd->has_c5greg) {
+		struct cb_data *cbd = cb_data_new(cb, data);
+		cbd->user = gd;
+		gd->c5greg_status = -1;
+
+		if (g_at_chat_send(gd->chat, "AT+C5GREG?", c5greg_prefix,
+					at_c5greg_cb, cbd, g_free) == 0) {
+			g_free(cbd);
+			CALLBACK_WITH_FAILURE(cb, -1, data);
+			return;
+		}
+	}
 }
 
 static void at_cgdcont_read_cb(gboolean ok, GAtResult *result,
@@ -187,14 +331,100 @@ static void at_cgdcont_read_cb(gboolean ok, GAtResult *result,
 				activated_cid);
 }
 
+static int cops_cb(gboolean ok, GAtResult *result)
+{
+	GAtResultIter iter;
+	int format, tech = -1;
+
+	if (!ok)
+		goto error;
+
+	g_at_result_iter_init(&iter, result);
+
+	if (!g_at_result_iter_next(&iter, "+COPS:"))
+		goto error;
+
+	g_at_result_iter_skip_next(&iter); /* mode: automatic, manual, ... */
+
+	if (!g_at_result_iter_next_number(&iter, &format))
+		goto error;
+
+	g_at_result_iter_skip_next(&iter); /* operator name or code */
+
+	if (!g_at_result_iter_next_number(&iter, &tech))
+		tech = -1; /* make sure it has not been set to something */
+error:
+	return tech;
+}
+
+
+static void netreg_notify_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct netreg_info *nri = user_data;
+	int cops_tech = cops_cb(ok, result);
+
+	if (cops_tech == -1) { /* take the indicator status */
+		ofono_gprs_status_notify(nri->gprs, nri->status);
+		return;
+	}
+
+	/*
+	 * values taken from the 3GPP 27.007 rel.15
+	 * matching enum access_technology in common.h up to 7.
+	 */
+	if (g_str_equal(nri->ind,"CGREG") && (cops_tech < 7 || cops_tech == 8))
+		ofono_gprs_status_notify(nri->gprs, nri->status);
+	else if (g_str_equal(nri->ind,"CEREG") && (cops_tech == 7 ||
+					cops_tech == 9 || cops_tech == 12))
+		ofono_gprs_status_notify(nri->gprs, nri->status);
+	else if (g_str_equal(nri->ind,"C5GREG") && (cops_tech == 10 ||
+					cops_tech == 11 || cops_tech == 13))
+		ofono_gprs_status_notify(nri->gprs, nri->status);
+	/* all other cases ignored: indicator not for current AcT */
+}
+
+static void netreg_notify(struct ofono_gprs *gprs, const char* ind, int status,
+								int bearer)
+{
+	struct gprs_data *gd = ofono_gprs_get_data(gprs);
+	struct netreg_info *nri;
+
+	if (status == NETWORK_REGISTRATION_STATUS_DENIED ||
+			status == NETWORK_REGISTRATION_STATUS_REGISTERED ||
+			status == NETWORK_REGISTRATION_STATUS_ROAMING ||
+			gd->nb_inds == 1) {
+		/* accept this status and process */
+		ofono_gprs_status_notify(gprs, status);
+
+		if (bearer != -1)
+			ofono_gprs_bearer_notify(gprs, bearer);
+
+		return;
+	}
+
+	/*
+	 * in this case nb_inds>1 && status not listed above
+	 * we check AT+COPS? for a second opinion.
+	 */
+
+	nri = g_new0(struct netreg_info, 1);
+	nri->gprs = gprs;
+	nri->gd = gd;
+	nri->ind = ind;
+	nri->status = status;
+	nri->bearer = bearer;
+	g_at_chat_send(gd->chat, "AT+COPS?", none_prefix, netreg_notify_cb,
+		nri, g_free);
+}
+
 static void cgreg_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_gprs *gprs = user_data;
-	int status;
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
+	int status, bearer;
 
 	if (at_util_parse_reg_unsolicited(result, "+CGREG:", &status,
-				NULL, NULL, NULL, gd->vendor) == FALSE)
+				NULL, NULL, &bearer, gd->vendor) == FALSE)
 		return;
 
 	/*
@@ -219,7 +449,33 @@ static void cgreg_notify(GAtResult *result, gpointer user_data)
 		gd->telit_try_reattach = FALSE;
 	}
 
-	ofono_gprs_status_notify(gprs, status);
+	netreg_notify(gprs, "CGREG", status, bearer);
+}
+
+static void cereg_notify(GAtResult *result, gpointer user_data)
+{
+	struct ofono_gprs *gprs = user_data;
+	struct gprs_data *gd = ofono_gprs_get_data(gprs);
+	int status, bearer;
+
+	if (at_util_parse_reg_unsolicited(result, "+CEREG:", &status,
+				NULL, NULL, &bearer, gd->vendor) == FALSE)
+		return;
+
+	netreg_notify(gprs, "CEREG", status, bearer);
+}
+
+static void c5greg_notify(GAtResult *result, gpointer user_data)
+{
+	struct ofono_gprs *gprs = user_data;
+	struct gprs_data *gd = ofono_gprs_get_data(gprs);
+	int status, bearer;
+
+	if (at_util_parse_reg_unsolicited(result, "+C5GREG:", &status,
+				NULL, NULL, &bearer, gd->vendor) == FALSE)
+		return;
+
+	netreg_notify(gprs, "C5GREG", status, bearer);
 }
 
 static void cgev_notify(GAtResult *result, gpointer user_data)
@@ -418,6 +674,91 @@ static void ublox_ureg_notify(GAtResult *result, gpointer user_data)
 	ofono_gprs_bearer_notify(gprs, bearer);
 }
 
+static void gemalto_ciev_ceer_notify(GAtResult *result, gpointer user_data)
+{
+	struct ofono_gprs *gprs = user_data;
+	const char *report;
+	GAtResultIter iter;
+
+	g_at_result_iter_init(&iter, result);
+
+	if (!g_at_result_iter_next(&iter, "+CIEV: ceer,"))
+		return;
+	/*
+	 * No need to check release cause group
+	 * as we only subscribe to no. 5
+	 */
+	if (!g_at_result_iter_skip_next(&iter))
+		return;
+	if (!g_at_result_iter_next_string(&iter, &report))
+		return;
+
+	/* TODO: Handle more of these? */
+
+	if (g_str_equal(report, "Regular deactivation")) {
+		ofono_gprs_detached_notify(gprs);
+		return;
+	}
+}
+
+static void gemalto_ciev_bearer_notify(GAtResult *result, gpointer user_data)
+{
+	struct ofono_gprs *gprs = user_data;
+	int bearer;
+	GAtResultIter iter;
+
+	g_at_result_iter_init(&iter, result);
+
+	if (!g_at_result_iter_next(&iter, "+CIEV: psinfo,"))
+		return;
+	if (!g_at_result_iter_next_number(&iter, &bearer))
+		return;
+
+	/* Go from Gemalto representation to oFono representation */
+	switch (bearer) {
+	case 0: /* GPRS/EGPRS not available */
+		/* Same as "no bearer"? */
+		bearer = 0;
+		break;
+	case 1: /* GPRS available, ignore this one */
+		return;
+	case 2: /* GPRS attached */
+		bearer = 1;
+		break;
+	case 3: /* EGPRS available, ignore this one */
+		return;
+	case 4: /* EGPRS attached */
+		bearer = 2;
+		break;
+	case 5: /* UMTS available, ignore this one */
+		return;
+	case 6: /* UMTS attached */
+		bearer = 3;
+		break;
+	case 7: /* HSDPA available, ignore this one */
+		return;
+	case 8: /* HSDPA attached */
+		bearer = 5;
+		break;
+	case 9: /* HSDPA/HSUPA available, ignore this one */
+		return;
+	case 10: /* HSDPA/HSUPA attached */
+		bearer = 6;
+		break;
+	/* TODO: Limit these cases to ALS3? */
+	case 16: /* E-UTRA available, ignore this one */
+		return;
+	case 17: /* E-UTRA attached */
+		bearer = 7;
+		break;
+	default: /* Assume that non-parsable values mean "no bearer" */
+		bearer = 0;
+		break;
+	}
+
+	ofono_gprs_bearer_notify(gprs, bearer);
+}
+
 static void cpsb_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_gprs *gprs = user_data;
@@ -438,14 +779,48 @@ static void cpsb_notify(GAtResult *result, gpointer user_data)
 	ofono_gprs_bearer_notify(gprs, bearer);
 }
 
-static void gprs_initialized(gboolean ok, GAtResult *result, gpointer user_data)
+static void gprs_initialized(struct ofono_gprs *gprs)
 {
-	struct ofono_gprs *gprs = user_data;
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
 
+	switch (gd->vendor) {
+	case OFONO_VENDOR_GEMALTO:
+		break;
+	default:
+		g_at_chat_send(gd->chat, "AT+CGAUTO=0", none_prefix, NULL, NULL,
+									NULL);
+	}
+
+	switch (gd->vendor) {
+	case OFONO_VENDOR_MBM:
+		/* Ericsson MBM and ST-E modems don't support AT+CGEREP=2,1 */
+		g_at_chat_send(gd->chat, "AT+CGEREP=1,0", none_prefix,
+			NULL, NULL, NULL);
+		break;
+	case OFONO_VENDOR_NOKIA:
+		/* Nokia data cards don't support AT+CGEREP=1,0 either */
+		g_at_chat_send(gd->chat, "AT+CGEREP=1", none_prefix,
+			NULL, NULL, NULL);
+		break;
+	case OFONO_VENDOR_GEMALTO:
+		g_at_chat_send(gd->chat, "AT+CGEREP=2", NULL,
+					NULL, NULL, NULL);
+		g_at_chat_send(gd->chat, "AT^SIND=\"psinfo\",1", none_prefix,
+			NULL, NULL, NULL);
+		break;
+	default:
+		g_at_chat_send(gd->chat, "AT+CGEREP=2,1", none_prefix,
+			NULL, NULL, NULL);
+		break;
+	}
+
 	g_at_chat_register(gd->chat, "+CGEV:", cgev_notify, FALSE, gprs, NULL);
-	g_at_chat_register(gd->chat, "+CGREG:", cgreg_notify,
-						FALSE, gprs, NULL);
+	g_at_chat_register(gd->chat, "+CGREG:", cgreg_notify, FALSE, gprs,
+									NULL);
+	g_at_chat_register(gd->chat, "+CEREG:", cereg_notify, FALSE, gprs,
+									NULL);
+	g_at_chat_register(gd->chat, "+C5GREG:", c5greg_notify, FALSE, gprs,
+									NULL);
 
 	switch (gd->vendor) {
 	case OFONO_VENDOR_HUAWEI:
@@ -466,6 +841,12 @@ static void gprs_initialized(gboolean ok, GAtResult *result, gpointer user_data)
 						FALSE, gprs, NULL);
 		g_at_chat_send(gd->chat, "AT#PSNT=1", none_prefix,
 						NULL, NULL, NULL);
+		break;
+	case OFONO_VENDOR_GEMALTO:
+		g_at_chat_register(gd->chat, "+CIEV: psinfo,",
+			gemalto_ciev_bearer_notify, FALSE, gprs, NULL);
+		g_at_chat_register(gd->chat, "+CIEV: ceer,",
+			gemalto_ciev_ceer_notify, FALSE, gprs, NULL);
 		break;
 	default:
 		g_at_chat_register(gd->chat, "+CPSB:", cpsb_notify,
@@ -488,16 +869,33 @@ static void gprs_initialized(gboolean ok, GAtResult *result, gpointer user_data)
 	ofono_gprs_register(gprs);
 }
 
-static void at_cgreg_test_cb(gboolean ok, GAtResult *result,
+static void set_indreg(struct gprs_data *gd, const char *ind, gboolean present)
+{
+	if (g_str_equal(ind,"CGREG"))
+		gd->has_cgreg = present;
+
+	if (g_str_equal(ind,"CEREG"))
+		gd->has_cereg = present;
+
+	if (g_str_equal(ind,"C5GREG"))
+		gd->has_c5greg = present;
+
+}
+
+static void at_indreg_test_cb(gboolean ok, GAtResult *result,
 				gpointer user_data)
 {
-	struct ofono_gprs *gprs = user_data;
+	struct cb_data *cbd = user_data;
+	struct ofono_gprs *gprs = cbd->cb;
+	const char *ind=cbd->data;
+	const char *last=cbd->user;
+
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
 	gint range[2];
 	GAtResultIter iter;
 	int cgreg1 = 0;
 	int cgreg2 = 0;
-	const char *cmd;
+	char buf[32];
 
 	if (!ok)
 		goto error;
@@ -505,7 +903,8 @@ static void at_cgreg_test_cb(gboolean ok, GAtResult *result,
 	g_at_result_iter_init(&iter, result);
 
 retry:
-	if (!g_at_result_iter_next(&iter, "+CGREG:"))
+	sprintf(buf,"+%s:",ind);
+	if (!g_at_result_iter_next(&iter, buf))
 		goto error;
 
 	if (!g_at_result_iter_open_list(&iter))
@@ -520,45 +919,75 @@ retry:
 
 	g_at_result_iter_close_list(&iter);
 
-	if (cgreg2)
-		cmd = "AT+CGREG=2";
-	else if (cgreg1)
-		cmd = "AT+CGREG=1";
-	else
+	if (gd->vendor == OFONO_VENDOR_GEMALTO) {
+		/*
+		 * Gemalto prefers to print as much information as available
+		 * for support purposes
+		 */
+		sprintf(buf, "AT+%s=%d",ind, range[1]);
+	} else if (cgreg1) {
+		sprintf(buf,"AT+%s=1", ind);
+	} else if (cgreg2) {
+		sprintf(buf,"AT+%s=2", ind);
+	} else
 		goto error;
 
-	g_at_chat_send(gd->chat, cmd, none_prefix, NULL, NULL, NULL);
-	g_at_chat_send(gd->chat, "AT+CGAUTO=0", none_prefix, NULL, NULL, NULL);
+	set_indreg(gd, ind,TRUE);
+	g_at_chat_send(gd->chat, buf, none_prefix, NULL, NULL, NULL);
 
-	switch (gd->vendor) {
-	case OFONO_VENDOR_MBM:
-		/* Ericsson MBM and ST-E modems don't support AT+CGEREP=2,1 */
-		g_at_chat_send(gd->chat, "AT+CGEREP=1,0", none_prefix,
-			gprs_initialized, gprs, NULL);
-		break;
-	case OFONO_VENDOR_NOKIA:
-		/* Nokia data cards don't support AT+CGEREP=1,0 either */
-		g_at_chat_send(gd->chat, "AT+CGEREP=1", none_prefix,
-			gprs_initialized, gprs, NULL);
-		break;
-	default:
-		g_at_chat_send(gd->chat, "AT+CGEREP=2,1", none_prefix,
-			gprs_initialized, gprs, NULL);
-		break;
-	}
-
+	if (last)
+		goto endcheck;
 	return;
 
 error:
-	ofono_info("GPRS not supported on this device");
-	ofono_gprs_remove(gprs);
+	set_indreg(gd, ind,FALSE);
+	if (!last)
+		return;
+
+endcheck:
+	if (gd->has_cgreg)
+		gd->nb_inds++;
+	if (gd->has_cereg)
+		gd->nb_inds++;
+	if (gd->has_c5greg)
+		gd->nb_inds++;
+
+	if (gd->nb_inds == 0) {
+		ofono_info("GPRS not supported on this device");
+		ofono_gprs_remove(gprs);
+		return;
+	}
+
+	gprs_initialized(gprs);
+}
+
+static void test_and_set_regstatus(struct ofono_gprs *gprs) {
+	struct gprs_data *gd = ofono_gprs_get_data(gprs);
+	struct cb_data *cbd_cg  = cb_data_new(gprs, "CGREG");
+	struct cb_data *cbd_ce  = cb_data_new(gprs, "CEREG");
+	struct cb_data *cbd_c5g = cb_data_new(gprs, "C5GREG");
+
+	cbd_c5g->user="last";
+
+	/*
+	 * modules can support one to all of the network registration indicators
+	 *
+	 * ofono will execute the next commands and related callbacks in order
+	 * therefore it is possible to verify all result on the last one.
+	 */
+
+	g_at_chat_send(gd->chat, "AT+CGREG=?", cgreg_prefix,
+					at_indreg_test_cb, cbd_cg, g_free);
+	g_at_chat_send(gd->chat, "AT+CEREG=?", cereg_prefix,
+					at_indreg_test_cb, cbd_ce, g_free);
+	g_at_chat_send(gd->chat, "AT+C5GREG=?", c5greg_prefix,
+					at_indreg_test_cb, cbd_c5g, g_free);
 }
 
 static void at_cgdcont_test_cb(gboolean ok, GAtResult *result,
 				gpointer user_data)
 {
 	struct ofono_gprs *gprs = user_data;
-	struct gprs_data *gd = ofono_gprs_get_data(gprs);
 	GAtResultIter iter;
 	int min, max;
 	const char *pdp_type;
@@ -599,10 +1028,7 @@ static void at_cgdcont_test_cb(gboolean ok, GAtResult *result,
 		goto error;
 
 	ofono_gprs_set_cid_range(gprs, min, max);
-
-	g_at_chat_send(gd->chat, "AT+CGREG=?", cgreg_prefix,
-			at_cgreg_test_cb, gprs, NULL);
-
+	test_and_set_regstatus(gprs);
 	return;
 
 error:
@@ -615,6 +1041,8 @@ static int at_gprs_probe(struct ofono_gprs *gprs,
 {
 	GAtChat *chat = data;
 	struct gprs_data *gd;
+	int autoattach;
+	struct ofono_modem* modem=ofono_gprs_get_modem(gprs);
 
 	gd = g_try_new0(struct gprs_data, 1);
 	if (gd == NULL)
@@ -625,8 +1053,16 @@ static int at_gprs_probe(struct ofono_gprs *gprs,
 
 	ofono_gprs_set_data(gprs, gd);
 
-	g_at_chat_send(gd->chat, "AT+CGDCONT=?", cgdcont_prefix,
-			at_cgdcont_test_cb, gprs, NULL);
+	if (gd->vendor == OFONO_VENDOR_GEMALTO) {
+		autoattach=ofono_modem_get_integer(modem, "GemaltoAutoAttach");
+		/* set autoattach */
+		gd->auto_attach = (autoattach == 1);
+		/* skip the cgdcont scanning: set manually */
+		test_and_set_regstatus(gprs);
+	} else {
+		g_at_chat_send(gd->chat, "AT+CGDCONT=?", cgdcont_prefix,
+						at_cgdcont_test_cb, gprs, NULL);
+	}
 
 	return 0;
 }

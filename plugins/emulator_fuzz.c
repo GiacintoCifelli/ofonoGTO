@@ -97,6 +97,7 @@ static int emulator_fuzz_init(void)
 {
 	DBusConnection *conn = ofono_dbus_get_connection();
 
+	return 0;
 	DBG("");
 
 	if (!g_dbus_register_interface(conn, EMULATOR_FUZZ_PATH,

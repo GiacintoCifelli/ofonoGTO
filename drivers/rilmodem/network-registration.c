@@ -36,7 +36,8 @@
 #include <ofono/modem.h>
 #include <ofono/netreg.h>
 
-#pragma GCC diagnostic ignored "-Wrestrict"
+// yocto gcc ARM compiler doesn't like it
+//#pragma GCC diagnostic ignored "-Wrestrict"
 
 #include <gril/gril.h>
 

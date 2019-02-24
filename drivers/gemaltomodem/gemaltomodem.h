@@ -21,9 +21,23 @@
  */
 
 #include <drivers/atmodem/atutil.h>
+#include <ofono/gemalto.h>
+#include "gemaltoutil.h"
 
 extern void gemalto_location_reporting_init();
 extern void gemalto_location_reporting_exit();
 
 extern void gemalto_voicecall_init();
 extern void gemalto_voicecall_exit();
+
+extern void gemalto_lte_init();
+extern void gemalto_lte_exit();
+
+extern void gemalto_gprs_context_swwan_blocking_init();
+extern void gemalto_gprs_context_swwan_blocking_exit();
+
+extern void gemalto_gprs_context_swwan_init();
+extern void gemalto_gprs_context_swwan_exit();
+
+extern void gemalto_gprs_context_mbim_init();
+extern void gemalto_gprs_context_mbim_exit();

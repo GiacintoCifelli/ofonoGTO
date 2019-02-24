@@ -56,6 +56,7 @@ struct smart_messaging {
 	struct sms_agent *agent;
 	unsigned int vcard_watch;
 	unsigned int vcal_watch;
+	unsigned int pdu_watch;
 };
 
 static void agent_exited(void *userdata)
@@ -70,6 +71,11 @@ static void agent_exited(void *userdata)
 	if (sm->vcal_watch > 0) {
 		__ofono_sms_datagram_watch_remove(sm->sms, sm->vcal_watch);
 		sm->vcal_watch = 0;
+	}
+
+	if (sm->pdu_watch > 0) {
+		__ofono_sms_datagram_watch_remove(sm->sms, sm->pdu_watch);
+		sm->pdu_watch = 0;
 	}
 
 	sm->agent = NULL;
@@ -101,6 +107,21 @@ static void vcal_received(const char *from, const struct tm *remote,
 		return;
 
 	sms_agent_dispatch_datagram(sm->agent, "ReceiveAppointment",
+					from, remote, local, buffer, len,
+					NULL, NULL, NULL);
+}
+
+static void pdu_received(const char *from, const struct tm *remote,
+				const struct tm *local, int dst, int src,
+				const unsigned char *buffer,
+				unsigned int len, void *data)
+{
+	struct smart_messaging *sm = data;
+
+	if (sm->agent == NULL)
+		return;
+
+	sms_agent_dispatch_datagram(sm->agent, "ReceivePdu",
 					from, remote, local, buffer, len,
 					NULL, NULL, NULL);
 }
@@ -141,6 +162,12 @@ static DBusMessage *smart_messaging_register_agent(DBusConnection *conn,
 							vcal_received,
 							VCAL_DST_PORT,
 							VCAL_SRC_PORT,
+							sm, NULL);
+
+	sm->pdu_watch = __ofono_sms_datagram_watch_add(sm->sms,
+							pdu_received,
+							NO_PORT,
+							NO_PORT,
 							sm, NULL);
 
 	return dbus_message_new_method_return(msg);
@@ -266,19 +293,73 @@ static DBusMessage *smart_messaging_send_vcal(DBusConnection *conn,
 	return NULL;
 }
 
+/*
+ * Pre-process a SMS pdu message and deliver it [D-Bus SendMessage()]
+ *
+ * @conn: D-Bus connection
+ * @msg: message data (telephone number and data)
+ * @data: SMS object to use for transmission
+ */
+static DBusMessage *sms_send_pdu_message(DBusConnection *conn, DBusMessage *msg,
+          void *data)
+{
+  struct smart_messaging *sm = data;
+  const char *to;
+  unsigned char *bytes;
+  int len;
+  GSList *msg_list;
+  unsigned int flags;
+  gboolean use_16bit_ref = FALSE;
+  int err;
+  struct ofono_uuid uuid;
+  unsigned short ref;
+
+  if (!dbus_message_get_args(msg, NULL, DBUS_TYPE_STRING, &to,
+          DBUS_TYPE_ARRAY, DBUS_TYPE_BYTE,
+          &bytes, &len, DBUS_TYPE_INVALID))
+    return __ofono_error_invalid_args(msg);
+
+  if (valid_phone_number_format(to) == FALSE)
+    return __ofono_error_invalid_format(msg);
+
+  ref = __ofono_sms_get_next_ref(sm->sms);
+  msg_list = sms_pdu_prepare(to, bytes, len, ref, use_16bit_ref, TRUE);
+
+  if (msg_list == NULL)
+    return __ofono_error_invalid_format(msg);
+
+  flags = OFONO_SMS_SUBMIT_FLAG_RETRY | OFONO_SMS_SUBMIT_FLAG_EXPOSE_DBUS;
+
+  err = __ofono_sms_txq_submit(sm->sms, msg_list, flags, &uuid,
+          message_queued, msg);
+
+  g_slist_free_full(msg_list, g_free);
+
+  if (err < 0)
+    return __ofono_error_failed(msg);
+
+  return NULL;
+}
+
 static const GDBusMethodTable smart_messaging_methods[] = {
-	{ GDBUS_METHOD("RegisterAgent", GDBUS_ARGS({ "path", "o" }), NULL,
+	{ GDBUS_METHOD("RegisterAgent",
+			GDBUS_ARGS({ "path", "o" }), NULL,
 			smart_messaging_register_agent) },
-	{ GDBUS_METHOD("UnregisterAgent", GDBUS_ARGS({ "path", "o" }), NULL,
+	{ GDBUS_METHOD("UnregisterAgent",
+			GDBUS_ARGS({ "path", "o" }), NULL,
 			smart_messaging_unregister_agent) },
 	{ GDBUS_ASYNC_METHOD("SendBusinessCard",
-				GDBUS_ARGS({ "to", "s" }, { "card", "ay" }),
-				GDBUS_ARGS({ "path", "o" }),
-				smart_messaging_send_vcard) },
+			GDBUS_ARGS({ "to", "s" }, { "card", "ay" }),
+			GDBUS_ARGS({ "path", "o" }),
+			smart_messaging_send_vcard) },
 	{ GDBUS_ASYNC_METHOD("SendAppointment",
 			GDBUS_ARGS({ "to", "s" }, { "appointment", "ay" }),
 			GDBUS_ARGS({ "path", "o" }),
 			smart_messaging_send_vcal) },
+	{ GDBUS_ASYNC_METHOD("SendPdu",
+			GDBUS_ARGS({ "to", "s" }, { "pdu", "ay" }),
+			GDBUS_ARGS({ "path", "o" }),
+			sms_send_pdu_message) },
 	{ }
 };
 
@@ -290,6 +371,7 @@ static void smart_messaging_cleanup(gpointer user)
 
 	sm->vcard_watch = 0;
 	sm->vcal_watch = 0;
+	sm->pdu_watch = 0;
 	sm->sms = NULL;
 
 	sms_agent_free(sm->agent);

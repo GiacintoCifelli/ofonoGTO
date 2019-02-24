@@ -114,6 +114,10 @@ static void print_arguments(GString *gstr, const GDBusArgInfo *args,
 	"<annotation name=\"org.freedesktop.DBus." name_ "\" "	\
 	"value=\"" value_ "\"/>"
 
+#define G_DBUS_ANNOTATE_EMITS_SIGNAL \
+	"<annotation name=\"org.freedesktop.DBus.Property.EmitsChangedSignal\" "\
+	"value=\"true\"/>"
+
 #define G_DBUS_ANNOTATE_DEPRECATED \
 	G_DBUS_ANNOTATE("Deprecated", "true")
 
@@ -185,6 +189,10 @@ static void generate_interface_xml(GString *gstr, struct interface_data *iface)
 		if (property->flags & G_DBUS_PROPERTY_FLAG_DEPRECATED)
 			g_string_append_printf(gstr,
 						G_DBUS_ANNOTATE_DEPRECATED);
+
+		if (property->flags & G_DBUS_PROPERTY_FLAG_EMITSIGNAL)
+			g_string_append_printf(gstr,
+						G_DBUS_ANNOTATE_EMITS_SIGNAL);
 
 		g_string_append_printf(gstr, "</property>");
 	}

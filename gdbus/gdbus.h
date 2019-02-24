@@ -107,6 +107,7 @@ enum GDBusSignalFlags {
 enum GDBusPropertyFlags {
 	G_DBUS_PROPERTY_FLAG_DEPRECATED   = (1 << 0),
 	G_DBUS_PROPERTY_FLAG_EXPERIMENTAL = (1 << 1),
+	G_DBUS_PROPERTY_FLAG_EMITSIGNAL   = (1 << 2),
 };
 
 enum GDBusSecurityFlags {

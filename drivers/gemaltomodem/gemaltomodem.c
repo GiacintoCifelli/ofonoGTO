@@ -37,12 +37,20 @@ static int gemaltomodem_init(void)
 {
 	gemalto_location_reporting_init();
 	gemalto_voicecall_init();
+	gemalto_lte_init();
+	gemalto_gprs_context_swwan_blocking_init();
+	gemalto_gprs_context_swwan_init();
+	gemalto_gprs_context_mbim_init();
 
 	return 0;
 }
 
 static void gemaltomodem_exit(void)
 {
+	gemalto_gprs_context_mbim_exit();
+	gemalto_gprs_context_swwan_exit();
+	gemalto_gprs_context_swwan_blocking_exit();
+	gemalto_lte_exit();
 	gemalto_voicecall_exit();
 	gemalto_location_reporting_exit();
 }

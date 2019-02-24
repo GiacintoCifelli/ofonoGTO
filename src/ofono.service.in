@@ -1,4 +1,6 @@
 [Unit]
+Requires=dbus.service
+After=dbus.service 
 Description=Telephony service
 After=syslog.target
 
@@ -6,6 +8,8 @@ After=syslog.target
 Type=dbus
 BusName=org.ofono
 ExecStart=@prefix@/sbin/ofonod -n
+Restart=always
+RestartSec=3
 StandardError=null
 
 [Install]

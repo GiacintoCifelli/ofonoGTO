@@ -105,7 +105,7 @@ static void cdma_connman_ifupdown(const char *interface, ofono_bool_t active)
 	}
 
 	if (ioctl(sk, SIOCSIFFLAGS, &ifr) < 0)
-		ofono_error("Failed to change interface flags");
+		ofono_error("Failed to change interface flags: %s", strerror(errno));
 
 done:
 	close(sk);

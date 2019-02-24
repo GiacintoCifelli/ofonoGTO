@@ -3420,6 +3420,100 @@ static inline GSList *sms_list_append(GSList *l, const struct sms *in)
 }
 
 /*
+ * Breaks up a pdu which doesn't fit in one sms into multiple sms
+ * Returns a list of sms messages in order.
+ */
+static GSList *split_concatenated_pdu_to_list(struct sms *template,
+		const unsigned char *data,
+		unsigned int len,
+		guint8 offset,
+		guint8 chunkSize)
+{
+	GSList *r = NULL;
+	const unsigned int numberOfSms = len/chunkSize + 1;
+	unsigned int written = 0;
+	guint8 seq = 0;
+
+	if (numberOfSms > 255 || numberOfSms == 1) {
+		return NULL;
+	}
+
+	while(++seq <= numberOfSms) {
+		unsigned int chunk = (seq == numberOfSms)?(len - written):chunkSize;
+
+		template->submit.ud[offset - 2] = (guint8)numberOfSms;
+		template->submit.ud[offset - 1] = seq;
+
+		template->submit.udl = chunk + offset;
+		memcpy(template->submit.ud + offset, data + written, chunk);
+
+		written += chunk;
+
+		r = sms_list_append(r, template);
+	}
+
+	r = g_slist_reverse(r);
+
+	return r;
+}
+
+/*
+ * Prepares a pdu for transmission.  Breaks up into fragments if
+ * necessary using ref as the concatenated message reference number.
+ * Returns a list of sms messages in order.
+ *
+ * @use_delivery_reports: value for the Status-Report-Request field
+ *     (23.040 3.2.9, 9.2.2.2)
+ */
+GSList *sms_pdu_prepare(const char *to,
+        const unsigned char *data, unsigned int len,
+        guint16 ref, gboolean use_16bit_ref,
+        gboolean use_delivery_reports)
+{
+  struct sms template;
+  guint8 header_len;
+  static guint8 mr = 0;
+
+  memset(&template, 0, sizeof(struct sms));
+  template.type = SMS_TYPE_SUBMIT;
+  template.submit.rd = FALSE;
+  template.submit.vpf = SMS_VALIDITY_PERIOD_FORMAT_RELATIVE;
+  template.submit.rp = FALSE;
+  template.submit.srr = use_delivery_reports;
+  template.submit.mr = ++mr==0?++mr:mr;
+  template.submit.vp.relative = 0x05; /* 30 minutes */
+  template.submit.dcs = 0xF5; /* Class 1, 8 bit */
+  template.submit.udhi = (len > 140);
+  sms_address_from_string(&template.submit.daddr, to);
+
+  if (len <= 140) {
+    template.submit.udl = len;
+    memcpy(template.submit.ud, data, len);
+
+    return sms_list_append(NULL, &template);
+  }
+
+  if (use_16bit_ref) {
+    header_len = 7;
+
+    template.submit.ud[0] = header_len - 1;
+    template.submit.ud[1] = SMS_IEI_CONCATENATED_16BIT;
+    template.submit.ud[2] = 4;
+    template.submit.ud[3] = (ref & 0xff00) >> 8;
+    template.submit.ud[4] = ref & 0xff;
+  } else {
+    header_len = 6;
+
+    template.submit.ud[0] = header_len - 1;
+    template.submit.ud[1] = SMS_IEI_CONCATENATED_8BIT;
+    template.submit.ud[2] = 3;
+    template.submit.ud[3] = ref & 0xff;
+  }
+
+  return split_concatenated_pdu_to_list(&template, data, len, header_len, 140-header_len);
+}
+
+/*
  * Prepares a datagram for transmission.  Breaks up into fragments if
  * necessary using ref as the concatenated message reference number.
  * Returns a list of sms messages in order.
@@ -3435,11 +3529,7 @@ GSList *sms_datagram_prepare(const char *to,
 				gboolean use_delivery_reports)
 {
 	struct sms template;
-	unsigned int offset;
-	unsigned int written;
-	unsigned int left;
-	guint8 seq;
-	GSList *r = NULL;
+	guint8 offset;
 
 	memset(&template, 0, sizeof(struct sms));
 	template.type = SMS_TYPE_SUBMIT;
@@ -3475,7 +3565,7 @@ GSList *sms_datagram_prepare(const char *to,
 		offset += 4;
 	}
 
-	if (len <= (140 - offset)) {
+	if (len <= (unsigned int)(140 - offset)) {
 		template.submit.udl = len + offset;
 		memcpy(template.submit.ud + offset, data, len);
 
@@ -3499,50 +3589,7 @@ GSList *sms_datagram_prepare(const char *to,
 		offset += 5;
 	}
 
-	seq = 0;
-	left = len;
-	written = 0;
-
-	while (left > 0) {
-		unsigned int chunk;
-
-		seq += 1;
-
-		chunk = 140 - offset;
-		if (left < chunk)
-			chunk = left;
-
-		template.submit.udl = chunk + offset;
-		memcpy(template.submit.ud + offset, data + written, chunk);
-
-		written += chunk;
-		left -= chunk;
-
-		template.submit.ud[offset - 1] = seq;
-
-		r = sms_list_append(r, &template);
-
-		if (seq == 255)
-			break;
-	}
-
-	if (left > 0) {
-		g_slist_free_full(r, g_free);
-
-		return NULL;
-	} else {
-		GSList *l;
-
-		for (l = r; l; l = l->next) {
-			struct sms *sms = l->data;
-
-			sms->submit.ud[offset - 2] = seq;
-		}
-	}
-
-	r = g_slist_reverse(r);
-
-	return r;
+	return split_concatenated_pdu_to_list(&template, data, len, offset, 140-offset);
 }
 
 /*
@@ -3559,7 +3606,7 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 					enum sms_alphabet alphabet)
 {
 	struct sms template;
-	int offset = 0;
+	guint8 offset = 0;
 	unsigned char *gsm_encoded = NULL;
 	char *ucs2_encoded = NULL;
 	long written;

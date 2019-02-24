@@ -136,7 +136,8 @@ static void gemalto_hangup(struct ofono_voicecall *vc,
 	unsigned int affected = (1 << CALL_STATUS_ACTIVE);
 
 	/* Hangup current active call */
-	gemalto_call_common("AT+CHLD=1", vc, generic_cb, affected, cb, data);
+//	gemalto_call_common("AT+CHLD=1", vc, generic_cb, affected, cb, data);
+	gemalto_call_common("AT+CHUP", vc, generic_cb, affected, cb, data);
 }
 
 static void gemalto_hold_all_active(struct ofono_voicecall *vc,

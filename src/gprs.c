@@ -296,6 +296,8 @@ static gboolean assign_context(struct pri_context *ctx, int use_cid)
 
 static void release_context(struct pri_context *ctx)
 {
+	const dbus_bool_t value = FALSE;
+
 	if (ctx == NULL || ctx->gprs == NULL || ctx->context_driver == NULL)
 		return;
 
@@ -304,6 +306,11 @@ static void release_context(struct pri_context *ctx)
 	ctx->context_driver->inuse = FALSE;
 	ctx->context_driver = NULL;
 	ctx->active = FALSE;
+
+	ofono_dbus_signal_property_changed(ofono_dbus_get_connection(),
+					ctx->path,
+					OFONO_CONNECTION_CONTEXT_INTERFACE,
+					"Active", DBUS_TYPE_BOOLEAN, &value);
 }
 
 static struct pri_context *gprs_context_by_path(struct ofono_gprs *gprs,
@@ -609,7 +616,7 @@ static void pri_ifupdown(const char *interface, ofono_bool_t active)
 	}
 
 	if (ioctl(sk, SIOCSIFFLAGS, &ifr) < 0)
-		ofono_error("Failed to change interface flags");
+		ofono_error("Failed to change interface flags: %s",strerror(errno));
 
 done:
 	close(sk);
@@ -831,8 +838,7 @@ static void pri_activate_callback(const struct ofono_error *error, void *data)
 {
 	struct pri_context *ctx = data;
 	struct ofono_gprs_context *gc = ctx->context_driver;
-	DBusConnection *conn = ofono_dbus_get_connection();
-	dbus_bool_t value;
+	const dbus_bool_t value = TRUE;
 
 	DBG("%p", ctx);
 
@@ -861,8 +867,8 @@ static void pri_activate_callback(const struct ofono_error *error, void *data)
 						gc->settings->ipv6 != NULL);
 	}
 
-	value = ctx->active;
-	ofono_dbus_signal_property_changed(conn, ctx->path,
+	ofono_dbus_signal_property_changed(ofono_dbus_get_connection(),
+					ctx->path,
 					OFONO_CONNECTION_CONTEXT_INTERFACE,
 					"Active", DBUS_TYPE_BOOLEAN, &value);
 }
@@ -870,8 +876,6 @@ static void pri_activate_callback(const struct ofono_error *error, void *data)
 static void pri_deactivate_callback(const struct ofono_error *error, void *data)
 {
 	struct pri_context *ctx = data;
-	DBusConnection *conn = ofono_dbus_get_connection();
-	dbus_bool_t value;
 
 	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
 		DBG("Deactivating context failed with error: %s",
@@ -886,11 +890,6 @@ static void pri_deactivate_callback(const struct ofono_error *error, void *data)
 
 	pri_reset_context_settings(ctx);
 	release_context(ctx);
-
-	value = ctx->active;
-	ofono_dbus_signal_property_changed(conn, ctx->path,
-					OFONO_CONNECTION_CONTEXT_INTERFACE,
-					"Active", DBUS_TYPE_BOOLEAN, &value);
 
 	/*
 	 * If "Attached" property was about to be signalled as TRUE but there
@@ -1694,15 +1693,20 @@ static void gprs_netreg_update(struct ofono_gprs *gprs)
 		 */
                 return;
 
+    /*
+     * TODO: This construct doesn't work. Check why! Remove it for now.
+     *
 	if (gprs->driver_attached == attach)
 		return;
+	*/
 
 	if (gprs->flags & GPRS_FLAG_ATTACHING) {
 		gprs->flags |= GPRS_FLAG_RECHECK;
 		return;
 	}
 
-	gprs->flags |= GPRS_FLAG_ATTACHING;
+	if (attach)
+		gprs->flags |= GPRS_FLAG_ATTACHING;
 
 	gprs->driver_attached = attach;
 	gprs->driver->set_attached(gprs, attach, gprs_attach_callback, gprs);
@@ -2096,10 +2100,8 @@ static void gprs_deactivate_for_remove(const struct ofono_error *error,
 {
 	struct pri_context *ctx = data;
 	struct ofono_gprs *gprs = ctx->gprs;
-	DBusConnection *conn = ofono_dbus_get_connection();
 	char *path;
 	const char *atompath;
-	dbus_bool_t value;
 
 	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
 		DBG("Removing context failed with error: %s",
@@ -2112,11 +2114,6 @@ static void gprs_deactivate_for_remove(const struct ofono_error *error,
 
 	pri_reset_context_settings(ctx);
 	release_context(ctx);
-
-	value = FALSE;
-	ofono_dbus_signal_property_changed(conn, ctx->path,
-					OFONO_CONNECTION_CONTEXT_INTERFACE,
-					"Active", DBUS_TYPE_BOOLEAN, &value);
 
 	if (gprs->settings) {
 		g_key_file_remove_group(gprs->settings, ctx->key, NULL);
@@ -2133,7 +2130,8 @@ static void gprs_deactivate_for_remove(const struct ofono_error *error,
 				dbus_message_new_method_return(gprs->pending));
 
 	atompath = __ofono_atom_get_path(gprs->atom);
-	g_dbus_emit_signal(conn, atompath, OFONO_CONNECTION_MANAGER_INTERFACE,
+	g_dbus_emit_signal(ofono_dbus_get_connection(), atompath,
+				OFONO_CONNECTION_MANAGER_INTERFACE,
 				"ContextRemoved", DBUS_TYPE_OBJECT_PATH, &path,
 				DBUS_TYPE_INVALID);
 	g_free(path);
@@ -2198,8 +2196,6 @@ static void gprs_deactivate_for_all(const struct ofono_error *error,
 {
 	struct pri_context *ctx = data;
 	struct ofono_gprs *gprs = ctx->gprs;
-	DBusConnection *conn;
-	dbus_bool_t value;
 
 	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
 		__ofono_dbus_pending_reply(&gprs->pending,
@@ -2209,12 +2205,6 @@ static void gprs_deactivate_for_all(const struct ofono_error *error,
 
 	pri_reset_context_settings(ctx);
 	release_context(ctx);
-
-	value = ctx->active;
-	conn = ofono_dbus_get_connection();
-	ofono_dbus_signal_property_changed(conn, ctx->path,
-					OFONO_CONNECTION_CONTEXT_INTERFACE,
-					"Active", DBUS_TYPE_BOOLEAN, &value);
 
 	gprs_deactivate_next(gprs);
 }
@@ -2609,10 +2599,8 @@ void ofono_gprs_set_cid_range(struct ofono_gprs *gprs,
 static void gprs_context_unregister(struct ofono_atom *atom)
 {
 	struct ofono_gprs_context *gc = __ofono_atom_get_data(atom);
-	DBusConnection *conn = ofono_dbus_get_connection();
 	GSList *l;
 	struct pri_context *ctx;
-	dbus_bool_t value;
 
 	DBG("%p, %p", gc, gc->gprs);
 
@@ -2634,11 +2622,6 @@ static void gprs_context_unregister(struct ofono_atom *atom)
 
 		pri_reset_context_settings(ctx);
 		release_context(ctx);
-
-		value = FALSE;
-		ofono_dbus_signal_property_changed(conn, ctx->path,
-					OFONO_CONNECTION_CONTEXT_INTERFACE,
-					"Active", DBUS_TYPE_BOOLEAN, &value);
 	}
 
 	gc->gprs->context_drivers = g_slist_remove(gc->gprs->context_drivers,
@@ -2686,10 +2669,8 @@ void ofono_gprs_bearer_notify(struct ofono_gprs *gprs, int bearer)
 void ofono_gprs_context_deactivated(struct ofono_gprs_context *gc,
 					unsigned int cid)
 {
-	DBusConnection *conn = ofono_dbus_get_connection();
 	GSList *l;
 	struct pri_context *ctx;
-	dbus_bool_t value;
 
 	if (gc->gprs == NULL)
 		return;
@@ -2705,11 +2686,6 @@ void ofono_gprs_context_deactivated(struct ofono_gprs_context *gc,
 
 		pri_reset_context_settings(ctx);
 		release_context(ctx);
-
-		value = FALSE;
-		ofono_dbus_signal_property_changed(conn, ctx->path,
-					OFONO_CONNECTION_CONTEXT_INTERFACE,
-					"Active", DBUS_TYPE_BOOLEAN, &value);
 	}
 
 	/*

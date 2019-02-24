@@ -11,7 +11,10 @@ fi
 		--mandir=/usr/share/man \
 		--sysconfdir=/etc \
 		--localstatedir=/var \
-		--enable-test \
-		--enable-tools \
-		--enable-dundee \
+		--enable-mbimmodem \
+		--disable-cdmamodem \
+		--disable-phonesim \
+		--disable-isimodem \
+		--disable-rilmodem \
+		--disable-bluetooth \
 		--disable-datafiles $*

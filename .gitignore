@@ -22,7 +22,8 @@ ltmain.sh
 missing
 stamp-h1
 autom4te.cache
-ell
+test-driver
+test-suite.log
 
 ofono.pc
 include/ofono
@@ -47,11 +48,9 @@ unit/test-rilmodem-cb
 unit/test-rilmodem-cs
 unit/test-rilmodem-gprs
 unit/test-rilmodem-sms
-unit/test-mbim
 unit/test-*.log
 unit/test-*.trs
-test-driver
-test-suite.log
+unit/test-mbim
 
 tools/huawei-audio
 tools/auto-enable
@@ -65,3 +64,25 @@ tools/stktest
 gatchat/gsmdial
 gatchat/test-server
 gatchat/test-qcdm
+
+act
+config.h.in~
+deact
+ell/
+genpatches.sh
+getstring.txt
+header_export.sh
+ldmon.sh
+list-contexts
+offline
+online
+pow
+powoff
+runthis.txt
+setup_connection.sh
+test/modem-connect
+test/modem-demo
+test/modem-list
+udhcp.script-miami
+ofono.zip
+

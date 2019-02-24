@@ -511,6 +511,7 @@ gboolean sms_mwi_dcs_decode(guint8 dcs, enum sms_mwi_type *type,
 				enum sms_charset *charset,
 				gboolean *active, gboolean *discard);
 
+#define NO_PORT -1
 gboolean sms_extract_app_port(const struct sms *sms, int *dst, int *src,
 				gboolean *is_8bit);
 gboolean sms_extract_concatenation(const struct sms *sms, guint16 *ref_num,
@@ -570,6 +571,11 @@ GSList *sms_datagram_prepare(const char *to,
 				unsigned short src, unsigned short dst,
 				gboolean use_16bit_port,
 				gboolean use_delivery_reports);
+
+GSList *sms_pdu_prepare(const char *to,
+        const unsigned char *data, unsigned int len,
+        guint16 ref, gboolean use_16bit_ref,
+        gboolean use_delivery_reports);
 
 gboolean cbs_dcs_decode(guint8 dcs, gboolean *udhi, enum sms_class *cls,
 			enum sms_charset *charset, gboolean *compressed,

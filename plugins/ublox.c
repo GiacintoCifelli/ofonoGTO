@@ -49,6 +49,7 @@ static const char *none_prefix[] = { NULL };
 
 enum supported_models {
 	SARA_G270			= 1102,
+	TOBY_R200			= 1107,
 	TOBYL2_COMPATIBLE_MODE		= 1141,
 	TOBYL2_MEDIUM_THROUGHPUT_MODE	= 1143,
 	TOBYL2_HIGH_THROUGHPUT_MODE	= 1146,
@@ -173,6 +174,7 @@ static int ublox_enable(struct ofono_modem *modem)
 	case SARA_G270:
 		data->vendor_family = OFONO_VENDOR_UBLOX;
 		break;
+	case TOBY_R200:
 	case TOBYL2_COMPATIBLE_MODE:
 	case TOBYL2_HIGH_THROUGHPUT_MODE:
 		data->vendor_family = OFONO_VENDOR_UBLOX_TOBY_L2;

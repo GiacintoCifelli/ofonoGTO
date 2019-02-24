@@ -150,6 +150,21 @@ static inline int at_util_convert_signal_strength(int strength)
 	return result;
 }
 
+static inline int at_util_convert_signal_strength_cesq(int strength_GSM,
+					int strength_UTRAN, int strength_EUTRAN)
+{
+	int result = -1;
+
+	if (strength_GSM != 99)
+		result = (strength_GSM * 100) / 63;
+	else if (strength_UTRAN != 255)
+		result = (strength_UTRAN * 100) / 96;
+	else if (strength_EUTRAN != 255)
+		result = (strength_EUTRAN * 100) / 97;
+
+	return result;
+}
+
 #define CALLBACK_WITH_FAILURE(cb, args...)		\
 	do {						\
 		struct ofono_error cb_e;		\

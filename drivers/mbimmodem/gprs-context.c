@@ -22,7 +22,7 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
+#define _GNU_SOURCE
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
@@ -312,6 +312,8 @@ error:
 		mbim_message_unref(message);
 }
 
+int usleep(useconds_t usec);
+
 static void mbim_activate_cb(struct mbim_message *message, void *user)
 {
 	struct ofono_gprs_context *gc = user;
@@ -328,6 +330,8 @@ static void mbim_activate_cb(struct mbim_message *message, void *user)
 	mbim_message_set_arguments(message, "uuuuuuuuuuuuuuu",
 				gcd->active_context,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+	if (0) usleep(500*1000); // doesn't help, but keep for now
 
 	if (mbim_device_send(gcd->device, GPRS_CONTEXT_GROUP, message,
 				mbim_ip_configuration_cb, gc, NULL) > 0)
