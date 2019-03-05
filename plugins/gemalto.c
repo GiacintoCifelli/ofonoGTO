@@ -2073,6 +2073,8 @@ static int mbim_enable(struct ofono_modem *modem)
 {
 	const char *device;
 	int fd;
+	struct serial_struct old, new;
+	int DTR_flag = TIOCM_DTR;
 	struct gemalto_data *md = ofono_modem_get_data(modem);
 
 	DBG("modem struct: %p", modem);
@@ -2083,9 +2085,14 @@ static int mbim_enable(struct ofono_modem *modem)
 
 	DBG("modem device: %s", device);
 	fd = open(device, O_EXCL | O_NONBLOCK | O_RDWR);
-
 	if (fd < 0)
 		goto other_devices;
+
+	ioctl(fd, TIOCGSERIAL, &old);
+	new = old;
+	new.closing_wait = ASYNC_CLOSING_WAIT_NONE;
+	ioctl(fd, TIOCSSERIAL, &new);
+	ioctl(fd, TIOCMBIS, &DTR_flag);
 
 	DBG("device: %s opened successfully", device);
 	md->device = mbim_device_new(fd, md->max_segment);
@@ -2124,6 +2131,8 @@ static int qmi_enable(struct ofono_modem *modem)
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	const char *device;
 	int fd;
+	struct serial_struct old, new;
+	int DTR_flag = TIOCM_DTR;
 
 	DBG("modem struct: %p", modem);
 
@@ -2134,6 +2143,12 @@ static int qmi_enable(struct ofono_modem *modem)
 	fd = open(device, O_RDWR | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0)
 		goto other_devices;
+
+	ioctl(fd, TIOCGSERIAL, &old);
+	new = old;
+	new.closing_wait = ASYNC_CLOSING_WAIT_NONE;
+	ioctl(fd, TIOCSSERIAL, &new);
+	ioctl(fd, TIOCMBIS, &DTR_flag);
 
 	data->device = qmi_device_new(fd);
 	if (!data->device) {
