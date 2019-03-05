@@ -47,6 +47,10 @@ char *gemalto_get_auth_command(struct ofono_modem *modem, int cid,
 					OFONO_GPRS_MAX_PASSWORD_LENGTH  + 1;
 	char *buf = g_new(char, buflen);
 
+	/* change the authentication method if the  parameters are invalid */
+	if (!*username || !*password)
+		auth_method = OFONO_GPRS_AUTH_METHOD_NONE;
+
 	/* for now. Later to consider modules where the LTE attach CID=3 */
 	if (cid==0)
 		cid=1;

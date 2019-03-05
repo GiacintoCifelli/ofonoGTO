@@ -79,10 +79,6 @@ static void gemalto_lte_set_default_attach_info_cb(gboolean ok, GAtResult *resul
 
 	auth_method = ldd->pending_info.auth_method;
 
-	/* change the authentication method if the  parameters are invalid */
-	if (!*ldd->pending_info.username || !*ldd->pending_info.password)
-		auth_method = OFONO_GPRS_AUTH_METHOD_NONE;
-
 	buf = gemalto_get_auth_command(ldd->modem, 0, auth_method,
 			ldd->pending_info.username, ldd->pending_info.password);
 	cbd = cb_data_ref(cbd);
