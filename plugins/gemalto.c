@@ -1723,7 +1723,7 @@ static gboolean gemalto_open_cb(GIOChannel *source, GIOCondition condition,
 	char buf[1024] = {0};
 	size_t buflen = 1024;
 
-	if (data->channel == NULL)
+	if (data == NULL || data->channel == NULL)
 		return TRUE;
 
 	if ((condition & G_IO_IN) == 0)
