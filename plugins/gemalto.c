@@ -1332,6 +1332,11 @@ static int gemalto_remove_delayed(void *modem)
 	if (!data)
 		return FALSE;
 
+	if (data->read_src) {
+		g_source_remove(data->read_src);
+		data->read_src = 0;
+	}
+
 	g_source_remove(data->remove_timer);
 	gemalto_remove(modem);
 	return FALSE;
@@ -1361,6 +1366,11 @@ static void gemalto_remove(struct ofono_modem *modem)
 		data->remove_timer = g_timeout_add_seconds(1,
 						gemalto_remove_delayed, modem);
 		return;
+	}
+
+	if (data->read_src) {
+		g_source_remove(data->read_src);
+		data->read_src = 0;
 	}
 
 	if (data->mbim == STATE_PRESENT) {
@@ -1728,7 +1738,10 @@ static gboolean gemalto_open_cb(GIOChannel *source, GIOCondition condition,
 	char buf[1024] = {0};
 	size_t buflen = 1024;
 
-	if (data == NULL || data->channel == NULL)
+	if (data == NULL)
+	  return FALSE;
+
+	if (data->channel == NULL)
 		return TRUE;
 
 	if ((condition & G_IO_IN) == 0)
@@ -1745,6 +1758,7 @@ static gboolean gemalto_open_cb(GIOChannel *source, GIOCondition condition,
 	g_source_remove(data->probing_timer);
 	data->probing_timer = 0;
 	g_source_remove(data->read_src);
+	data->read_src = 0;
 	g_io_channel_flush(data->channel, NULL);
 	/* reset channel defaults*/
 	g_io_channel_set_buffered(data->channel, TRUE);
