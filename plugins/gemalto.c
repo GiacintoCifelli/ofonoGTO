@@ -1861,7 +1861,7 @@ static void gemalto_open_device(const char *device,
 	data->open_cb = func;
 	data->read_src = g_io_add_watch(data->channel, G_IO_IN, gemalto_open_cb,
 									modem);
-	data->probing_timer = g_timeout_add_seconds(2, gemalto_probe_device,
+	data->probing_timer = g_timeout_add_seconds(5, gemalto_probe_device,
 									modem);
 }
 
