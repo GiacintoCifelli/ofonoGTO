@@ -1668,7 +1668,12 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	if (data->mdm && data->gprs_opt == NO_GPRS)
 		data->gprs_opt = USE_PPP;
 
-	g_at_chat_set_wakeup_command(data->app, "AT\r", 1000, 5000);
+	/*
+	 * The msec time must be higher than the time between the most
+	 * frequent polling commands (e.g. if gemalto_csq_query is polled
+	 * every 5s then msec shall be more. In this case we put it to 6s)
+	 */
+	g_at_chat_set_wakeup_command(data->app, "AT\r", 1000, 6000);
 
 	g_at_chat_send(data->app, "ATE0", none_prefix, NULL, NULL, NULL);
 
