@@ -133,7 +133,7 @@ struct gemalto_data {
 	GIOChannel *channel;
 	GAtChat *tmp_chat;
 	OpenResultFunc open_cb;
-	guint read_src;
+	guint portfd;
 	GAtChat *app;
 	GAtChat *mdm;
 	int cfun;
@@ -1332,15 +1332,12 @@ static int gemalto_remove_delayed(void *modem)
 	if (!data)
 		return FALSE;
 
-	if (data->read_src) {
-		g_source_remove(data->read_src);
-		data->read_src = 0;
-	}
-
 	g_source_remove(data->remove_timer);
 	gemalto_remove(modem);
 	return FALSE;
 }
+
+void remove_modem_notify(void *m);
 
 static void gemalto_remove(struct ofono_modem *modem)
 {
@@ -1366,11 +1363,6 @@ static void gemalto_remove(struct ofono_modem *modem)
 		data->remove_timer = g_timeout_add_seconds(1,
 						gemalto_remove_delayed, modem);
 		return;
-	}
-
-	if (data->read_src) {
-		g_source_remove(data->read_src);
-		data->read_src = 0;
 	}
 
 	if (data->mbim == STATE_PRESENT) {
@@ -1436,6 +1428,7 @@ static void gemalto_remove(struct ofono_modem *modem)
 
 	ofono_modem_set_data(modem, NULL);
 	g_free(data);
+	remove_modem_notify(modem);
 }
 
 static void sim_ready_cb(gboolean present, gpointer user_data)
@@ -1728,72 +1721,71 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	data->hold_remove = FALSE;
 }
 
-static gboolean gemalto_open_cb(GIOChannel *source, GIOCondition condition,
-							gpointer user_data)
-{
-	struct ofono_modem *modem = user_data;
-	struct gemalto_data *data = ofono_modem_get_data(modem);
-	GAtSyntax *syntax;
-	GIOStatus status;
-	char buf[1024] = {0};
-	size_t buflen = 1024;
+#include <asm/ioctls.h>
+#include <linux/serial.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <poll.h>
 
-	if (data == NULL)
-	  return FALSE;
+static int write_fd(int fd, void *buf, size_t size) {
+	size_t written = 0;
+	int error = 0;
+	struct pollfd pfd;
+	pfd.fd = fd;
+	pfd.events = POLLOUT | POLLERR | POLLHUP | POLLNVAL;
+	while(!error && written<size) {
+		int pollret = poll(&pfd, 1, 10); /* block max 10ms */
+		if(pollret<0) {
+			error = errno;
+		}  else if (pollret>0) {
+			if(pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+				error = -1000;
+			} else
+				written += write(fd, buf+written, size-written);
+		}
+	}
+	if(error!=0) return error;
+	return written;
+}
 
-	if (data->channel == NULL)
-		return TRUE;
-
-	if ((condition & G_IO_IN) == 0)
-		return TRUE;
-
-	status = g_io_channel_read_chars(data->channel, buf, buflen, &buflen, NULL);
-
-	if (status == G_IO_STATUS_ERROR)
-		goto failed;
-
-	if(!strstr(buf, "OK"))
-		return TRUE; /* keep waiting and receiving buffer notif. */
-
-	g_source_remove(data->probing_timer);
-	data->probing_timer = 0;
-	g_source_remove(data->read_src);
-	data->read_src = 0;
-	g_io_channel_flush(data->channel, NULL);
-	/* reset channel defaults*/
-	g_io_channel_set_buffered(data->channel, TRUE);
-	g_io_channel_set_encoding(data->channel, "UTF-8", NULL);
-
-	syntax = g_at_syntax_new_gsm_permissive();
-	data->tmp_chat = g_at_chat_new(data->channel, syntax);
-	g_at_syntax_unref(syntax);
-
-	if (data->tmp_chat == NULL)
-		goto failed;
-
-	g_io_channel_unref(data->channel);
-	data->channel = NULL;
-	g_at_chat_set_debug(data->tmp_chat, gemalto_at_debug, "App: ");
-	data->open_cb(TRUE, modem);
-	return TRUE; // finished
-failed:
-	DBG("chat creation failed. aborting.");
-	g_io_channel_unref(data->channel);
-	data->channel = NULL;
-	DBG("aborted.");
-	data->open_cb(FALSE, modem);
-	return FALSE; // abort
+static int read_fd(int fd, void *buf, size_t bufsize) {
+	struct pollfd pfd;
+	int pollret;
+	pfd.fd = fd;
+	pfd.events = POLLIN | POLLERR | POLLHUP | POLLNVAL;
+	pollret = poll(&pfd, 1, 10); /* block max 10ms */
+	if(pollret<0)
+		return errno;
+	if(pollret>0) {
+		if(pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
+			return -1000;
+		return read(fd, buf, bufsize); /* POLLIN case */
+	}
+	return 0; /* pollret = 0 -> no data available, timeout expired */
 }
 
 static int gemalto_probe_device(void *user_data)
 {
 	struct ofono_modem *modem = user_data;
 	struct gemalto_data *data = ofono_modem_get_data(modem);
-	GIOStatus status;
+	int status;
+	char buf[1024] = {0};
+	size_t buflen = 1024;
+	GAtSyntax *syntax;
 
 	if (data->channel==NULL)
 		return FALSE;
 
+	/*
+	 * the timer is removed and re-created at each pass, because the writing
+	 * loop can in theory be longer than the timeout, hence causing parallel
+	 * calls, with unpredictable effects
+	 */
+	g_source_remove(data->probing_timer);
+	data->probing_timer = 0; /* remove the timer reference */
 	data->waiting_time++;
 	DBG("%d/%d", data->waiting_time, data->init_waiting_time+3);
 
@@ -1802,29 +1794,44 @@ static int gemalto_probe_device(void *user_data)
 		goto failed;
 	}
 
-	status = g_io_channel_write_chars(data->channel, "AT\r", 3, NULL, NULL);
-
-	if (status != G_IO_STATUS_NORMAL && status != G_IO_STATUS_AGAIN)
+	status = write_fd(data->portfd, "AT\r", 3);
+	if(status<0)
 		goto failed;
 
-	return TRUE; // to be called again
+	status = read_fd(data->portfd, buf, buflen);
+	if(status<0)
+		goto failed;
+
+	if(!strstr(buf, "OK")) {
+		data->probing_timer = g_timeout_add_seconds(1,
+						gemalto_probe_device, modem);
+		return TRUE; /* keep waiting */
+	}
+
+	/* AT was answered with OK: port ready */
+	g_io_channel_flush(data->channel, NULL);
+	/* reset channel defaults*/
+	g_io_channel_set_buffered(data->channel, TRUE);
+	g_io_channel_set_encoding(data->channel, "UTF-8", NULL);
+	syntax = g_at_syntax_new_gsm_permissive();
+	data->tmp_chat = g_at_chat_new(data->channel, syntax);
+	g_at_syntax_unref(syntax);
+	if (data->tmp_chat == NULL)
+		goto failed;
+	g_io_channel_unref(data->channel);
+	data->channel = NULL;
+	g_at_chat_set_debug(data->tmp_chat, gemalto_at_debug, "App: ");
+	data->open_cb(TRUE, modem);
+	return FALSE; /* kill the timer: finished */
 
 failed:
-	g_source_remove(data->probing_timer);
-	data->probing_timer = 0; /* remove the timer reference */
-	DBG("timeout: abort");
+	DBG("timeout or port error: abort");
 	g_io_channel_unref(data->channel);
 	data->channel = NULL;
 	data->tmp_chat = NULL;
 	data->open_cb(FALSE, modem);
-	return FALSE; // abort
+	return FALSE; /* abort */
 }
-
-#include <asm/ioctls.h>
-#include <linux/serial.h>
-#include <termios.h>
-#include <fcntl.h>
-#include <sys/ioctl.h>
 
 static void gemalto_open_device(const char *device,
 				OpenResultFunc func, struct ofono_modem *modem)
@@ -1878,9 +1885,8 @@ static void gemalto_open_device(const char *device,
 	g_io_channel_set_encoding(data->channel, NULL, NULL);
 	g_io_channel_set_buffered(data->channel, FALSE);
 	data->open_cb = func;
-	data->read_src = g_io_add_watch(data->channel, G_IO_IN, gemalto_open_cb,
-									modem);
-	data->probing_timer = g_timeout_add_seconds(5, gemalto_probe_device,
+	data->portfd = fd;
+	data->probing_timer = g_timeout_add_seconds(1, gemalto_probe_device,
 									modem);
 }
 
