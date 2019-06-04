@@ -1152,7 +1152,7 @@ static DBusMessage *modem_set_property(DBusConnection *conn,
 		if (powered) {
 			modem_change_state(modem, MODEM_STATE_PRE_SIM);
 
-			/* Force SIM Ready for devies with no sim atom */
+			/* Force SIM Ready for devices with no sim atom */
 			if (modem_has_sim(modem) == FALSE)
 				sim_state_watch(OFONO_SIM_STATE_READY, modem);
 		} else {
@@ -2158,18 +2158,14 @@ static void modem_unregister(struct ofono_modem *modem)
 
 	if (modem->driver && modem->driver->remove)
 		modem->driver->remove(modem);
-}
 
-void remove_modem_notify(void *m);
+	g_hash_table_destroy(modem->properties);
+	modem->properties = NULL;
 
-void remove_modem_notify(void *m) {
-    struct ofono_modem *modem = m;
-    g_hash_table_destroy(modem->properties);
-    modem->properties = NULL;
+	modem->driver = NULL; /* FIXME nothing to remove? */
 
-    modem->driver = NULL;
-    emit_modem_removed(modem);
-    call_modemwatches(modem, FALSE);
+	emit_modem_removed(modem);
+	call_modemwatches(modem, FALSE);
 }
 
 void ofono_modem_remove(struct ofono_modem *modem)

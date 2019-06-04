@@ -229,6 +229,10 @@ static void mbim_ip_configuration_cb(struct mbim_message *message, void *user)
 		}
 	}
 
+	if (ipv4_config_available & 0x8) { /* IPv4 mtu info */
+	    ofono_gprs_context_set_ipv4_mtu(gc, ipv4_mtu);
+	}
+
 	if (gcd->proto == OFONO_GPRS_PROTO_IP)
 		goto done;
 ipv6:
@@ -283,6 +287,11 @@ ipv6:
 			ofono_gprs_context_set_ipv6_dns_servers(gc, dns);
 		}
 	}
+
+  if (ipv6_config_available & 0x8) { /* IPv6 mtu info */
+    ofono_gprs_context_set_ipv6_mtu(gc, ipv6_mtu);
+  }
+
 done:
 
 	gcd->state = STATE_ACTIVE;

@@ -78,20 +78,20 @@
 void print_trace();
 
 void print_trace() {
-    char pid_buf[30];
-    char name_buf[512];
-    int child_pid;
-    sprintf(pid_buf, "%d", getpid());
-    name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
-    child_pid = fork();
-    if (!child_pid) {
-        dup2(2,1); // redirect output to stderr
-        fprintf(stdout,"stack trace for %s pid=%s\n",name_buf,pid_buf);
-        execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
-        abort(); /* If gdb failed to start */
-    } else {
-        waitpid(child_pid,NULL,0);
-    }
+	char pid_buf[30];
+	char name_buf[512];
+	int child_pid;
+	sprintf(pid_buf, "%d", getpid());
+	name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
+	child_pid = fork();
+	if (!child_pid) {
+		dup2(2,1); // redirect output to stderr
+		fprintf(stdout,"stack trace for %s pid=%s\n",name_buf,pid_buf);
+		execlp("gdb", "gdb", "--batch", "-n", "-ex", "thread", "-ex", "bt", name_buf, pid_buf, NULL);
+		abort(); /* If gdb failed to start */
+	} else {
+		waitpid(child_pid,NULL,0);
+	}
 }
 
 /* debug utilities - end */
@@ -127,8 +127,6 @@ static const char *sgpsc_prefix[] = { "^SGPSC:", NULL };
 typedef void (*OpenResultFunc)(gboolean success, struct ofono_modem *modem);
 
 struct gemalto_data {
-	gboolean hold_remove;
-	guint remove_timer;
 	gboolean init_done;
 	GIOChannel *channel;
 	GAtChat *tmp_chat;
@@ -150,13 +148,13 @@ struct gemalto_data {
 	guint probing_timer;
 	guint init_waiting_time;
 	guint waiting_time;
+	guint online_timer;
 
 	enum gemalto_connection_type conn;
 	enum gemalto_device_state mbim;
 	enum gemalto_device_state qmi;
 	enum gemalto_device_state ecmncm;
 	enum gemalto_device_state gina;
-	gboolean use_mdm_for_app;
 	gboolean voice_avail;
 	enum auth_option auth_syntax;
 	enum gprs_option gprs_opt;
@@ -168,7 +166,11 @@ struct gemalto_data {
 
 	struct ofono_netreg *netreg;
 
-	void *device; /* struct mbim_device* or struct qmi_device* */
+	/* struct mbim_device* or struct qmi_device* */
+	union {
+	  struct mbim_device *mbim;
+	  struct qmi_device  *qmi;
+	} device;
 
 	/* mbim data */
 	uint16_t max_segment;
@@ -176,9 +178,13 @@ struct gemalto_data {
 	uint8_t max_sessions;
 
 	/* hardware monitor variables */
-	DBusMessage *hm_msg;
-	int32_t temperature;
-	int32_t voltage;
+	struct {
+		DBusMessage *msg;
+		int32_t temperature;
+		int32_t voltage;
+		guint sctm;
+		guint sbc;
+	} hwmon;
 	/* gnss variables */
 	DBusMessage *gnss_msg;
 	/* hardware control variables */
@@ -389,7 +395,7 @@ static void gemalto_sctm_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	DBusMessageIter dbus_iter;
 	DBusMessageIter dbus_dict;
 
-	if (data->hm_msg == NULL)
+	if (data->hwmon.msg == NULL)
 		return;
 
 	if (!ok)
@@ -406,10 +412,10 @@ static void gemalto_sctm_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	if (!g_at_result_iter_skip_next(&iter))
 		goto error;
 
-	if (!g_at_result_iter_next_number(&iter, &data->temperature))
+	if (!g_at_result_iter_next_number(&iter, &data->hwmon.temperature))
 		goto error;
 
-	reply = dbus_message_new_method_return(data->hm_msg);
+	reply = dbus_message_new_method_return(data->hwmon.msg);
 
 	dbus_message_iter_init_append(reply, &dbus_iter);
 
@@ -418,20 +424,20 @@ static void gemalto_sctm_cb(gboolean ok, GAtResult *result, gpointer user_data)
 			&dbus_dict);
 
 	ofono_dbus_dict_append(&dbus_dict, "Temperature",
-			DBUS_TYPE_INT32, &data->temperature);
+			DBUS_TYPE_INT32, &data->hwmon.temperature);
 
 	ofono_dbus_dict_append(&dbus_dict, "Voltage",
-			DBUS_TYPE_UINT32, &data->voltage);
+			DBUS_TYPE_UINT32, &data->hwmon.voltage);
 
 	dbus_message_iter_close_container(&dbus_iter, &dbus_dict);
 
-	__ofono_dbus_pending_reply(&data->hm_msg, reply);
+	__ofono_dbus_pending_reply(&data->hwmon.msg, reply);
 
 	return;
 
 error:
-	__ofono_dbus_pending_reply(&data->hm_msg,
-			__ofono_error_failed(data->hm_msg));
+	__ofono_dbus_pending_reply(&data->hwmon.msg,
+			__ofono_error_failed(data->hwmon.msg));
 }
 
 static void gemalto_sbv_cb(gboolean ok, GAtResult *result, gpointer user_data)
@@ -447,7 +453,7 @@ static void gemalto_sbv_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	if (!g_at_result_iter_next(&iter, "^SBV:"))
 		goto error;
 
-	if (!g_at_result_iter_next_number(&iter, &data->voltage))
+	if (!g_at_result_iter_next_number(&iter, &data->hwmon.voltage))
 		goto error;
 
 	if (g_at_chat_send(data->app, "AT^SCTM?", sctm_prefix, gemalto_sctm_cb,
@@ -455,8 +461,8 @@ static void gemalto_sbv_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		return;
 
 error:
-	__ofono_dbus_pending_reply(&data->hm_msg,
-			__ofono_error_failed(data->hm_msg));
+	__ofono_dbus_pending_reply(&data->hwmon.msg,
+			__ofono_error_failed(data->hwmon.msg));
 }
 
 static DBusMessage *hardware_monitor_get_statistics(DBusConnection *conn,
@@ -467,14 +473,14 @@ static DBusMessage *hardware_monitor_get_statistics(DBusConnection *conn,
 
 	DBG("");
 
-	if (data->hm_msg != NULL)
+	if (data->hwmon.msg != NULL)
 		return __ofono_error_busy(msg);
 
 	if (!g_at_chat_send(data->app, "AT^SBV", sbv_prefix, gemalto_sbv_cb,
 			data, NULL))
 		return __ofono_error_failed(msg);
 
-	data->hm_msg = dbus_message_ref(msg);
+	data->hwmon.msg = dbus_message_ref(msg);
 
 	return NULL;
 }
@@ -501,10 +507,10 @@ static void gemalto_hardware_monitor_enable(struct ofono_modem *modem)
 	const char *path = ofono_modem_get_path(modem);
 
 	/* Listen to over/undertemperature URCs (activated with AT^SCTM) */
-	g_at_chat_register(data->app, "^SCTM_B:",
+	data->hwmon.sctm = g_at_chat_register(data->app, "^SCTM_B:",
 		gemalto_sctmb_notify, FALSE, NULL, NULL);
 	/* Listen to over/under voltage URCs (automatic URC) */
-	g_at_chat_register(data->app, "^SBC:",
+	data->hwmon.sbc = g_at_chat_register(data->app, "^SBC:",
 		gemalto_sbc_notify, FALSE, NULL, NULL);
 	/* Enable temperature URC and value output */
 	g_at_chat_send(data->app, "AT^SCTM=1,1", none_prefix, NULL, NULL, NULL);
@@ -535,6 +541,34 @@ static void gemalto_hardware_monitor_enable(struct ofono_modem *modem)
 	}
 
 	ofono_modem_add_interface(modem, CINTERION_LEGACY_HWMON_INTERFACE);
+}
+
+static void gemalto_hardware_monitor_disable(struct ofono_modem *modem)
+{
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
+
+	/* Disable temperature URC */
+	if (data->app) {
+		g_at_chat_send(data->app, "AT^SCTM=0", none_prefix, NULL, NULL, NULL);
+		if (data->hwmon.sbc) g_at_chat_unregister(data->app, data->hwmon.sbc);
+		if (data->hwmon.sctm) g_at_chat_unregister(data->app, data->hwmon.sctm);
+	}
+
+	if (!g_dbus_unregister_interface(conn, path, HARDWARE_MONITOR_INTERFACE)) {
+		ofono_error("Could not unregister %s interface under %s",
+			HARDWARE_MONITOR_INTERFACE, path);
+	}
+
+	ofono_modem_remove_interface(modem, HARDWARE_MONITOR_INTERFACE);
+
+	if (!g_dbus_unregister_interface(conn, path, CINTERION_LEGACY_HWMON_INTERFACE)) {
+		ofono_error("Could not unregister %s interface under %s",
+			CINTERION_LEGACY_HWMON_INTERFACE, path);
+	}
+
+	ofono_modem_remove_interface(modem, CINTERION_LEGACY_HWMON_INTERFACE);
 }
 
 /*******************************************************************************
@@ -591,8 +625,22 @@ static void gemalto_time_enable(struct ofono_modem *modem)
 	ofono_modem_add_interface(modem, GEMALTO_NITZ_TIME_INTERFACE);
 }
 
+static void gemalto_time_disable(struct ofono_modem *modem)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
+
+	if (!g_dbus_unregister_interface(conn, path, GEMALTO_NITZ_TIME_INTERFACE)) {
+		ofono_error("Could not unregister %s interface under %s",
+			GEMALTO_NITZ_TIME_INTERFACE, path);
+		return;
+	}
+
+	ofono_modem_remove_interface(modem, GEMALTO_NITZ_TIME_INTERFACE);
+}
+
 /*******************************************************************************
- * Command passtrhough interface
+ * Command passthrough interface
  ******************************************************************************/
 
 #define COMMAND_PASSTHROUGH_INTERFACE OFONO_SERVICE ".gemalto.CommandPassthrough"
@@ -779,6 +827,21 @@ static void gemalto_command_passthrough_enable(struct ofono_modem *modem)
 	}
 
 	ofono_modem_add_interface(modem, COMMAND_PASSTHROUGH_INTERFACE);
+}
+
+static void gemalto_command_passthrough_disable(struct ofono_modem *modem)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
+
+	/* Create Command Passthrough DBus interface */
+	if (!g_dbus_unregister_interface(conn, path, COMMAND_PASSTHROUGH_INTERFACE)) {
+		ofono_error("Could not register %s interface under %s",
+			COMMAND_PASSTHROUGH_INTERFACE, path);
+		return;
+	}
+
+	ofono_modem_remove_interface(modem, COMMAND_PASSTHROUGH_INTERFACE);
 }
 
 /*******************************************************************************
@@ -1005,6 +1068,23 @@ static void gemalto_gnss_enable(struct ofono_modem *modem)
 					gemalto_gnss_enable_cb, modem, NULL);
 }
 
+static void gemalto_gnss_disable(struct ofono_modem *modem)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
+
+	gnss_exec_stored_param(modem, "gnss_shutdown"); // FIXME where to describe/read
+
+	/* Create GNSS DBus interface */
+	if (!g_dbus_unregister_interface(conn, path, GNSS_INTERFACE)) {
+		ofono_error("Could not unregister %s interface under %s",
+			GNSS_INTERFACE, path);
+		return;
+	}
+
+	ofono_modem_remove_interface(modem, GNSS_INTERFACE);
+}
+
 /*******************************************************************************
  * Hardware control interface
  ******************************************************************************/
@@ -1140,21 +1220,10 @@ static void gemalto_smso_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	if (data->hc_msg == NULL)
 		return;
 
-	if (data->conn != GEMALTO_CONNECTION_SERIAL)
-		goto finished;
+	if (data->conn == GEMALTO_CONNECTION_SERIAL && ok) {
+	  ofono_modem_set_powered(modem, FALSE);
+	}
 
-	if (data->mdm)
-		g_at_chat_unref(data->mdm);
-	data->mdm = NULL;
-
-	if (data->app)
-		g_at_chat_unref(data->app);
-	data->app = NULL;
-
-	if (ok)
-		ofono_modem_set_powered(modem, FALSE);
-
-finished:
 	reply = dbus_message_new_method_return(data->hc_msg);
 	__ofono_dbus_pending_reply(&data->hc_msg, reply);
 }
@@ -1250,6 +1319,21 @@ static void gemalto_hardware_control_enable(struct ofono_modem *modem)
 	ofono_modem_add_interface(modem, HARDWARE_CONTROL_INTERFACE);
 }
 
+static void gemalto_hardware_control_disable(struct ofono_modem *modem)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
+
+	/* Create Hardware Control DBus interface */
+	if (!g_dbus_unregister_interface(conn, path, HARDWARE_CONTROL_INTERFACE)) {
+		ofono_error("Could not unregister %s interface under %s",
+			HARDWARE_CONTROL_INTERFACE, path);
+		return;
+	}
+
+	ofono_modem_remove_interface(modem, HARDWARE_CONTROL_INTERFACE);
+}
+
 /*******************************************************************************
  * modem plugin
  ******************************************************************************/
@@ -1318,59 +1402,41 @@ static int gemalto_probe(struct ofono_modem *modem)
 	return 0;
 }
 
-static void gemalto_remove(struct ofono_modem *modem);
-
-static int gemalto_remove_delayed(void *modem)
-{
-	struct gemalto_data *data;
-
-	if (!modem)
-		return FALSE;
-
-	data = ofono_modem_get_data(modem);
-
-	if (!data)
-		return FALSE;
-
-	g_source_remove(data->remove_timer);
-	gemalto_remove(modem);
-	return FALSE;
-}
-
-void remove_modem_notify(void *m);
-
 static void gemalto_remove(struct ofono_modem *modem)
 {
 	struct gemalto_data *data;
-	DBusConnection *conn = ofono_dbus_get_connection();
-	const char *path;
+
+	DBG("");
 
 	if (!modem)
 		return;
 
 	data = ofono_modem_get_data(modem);
-	path = ofono_modem_get_path(modem);
 
 	if (!data)
 		return;
 
 	/*
-	 * data->init_done alone is not sufficient because the device could be
-	 * unplugged before calling enable
-	 */
-	if (data->hold_remove) {
-		/* in initialization phase: cannot remove now. retry in 1s */
-		data->remove_timer = g_timeout_add_seconds(1,
-						gemalto_remove_delayed, modem);
-		return;
+	 * Stop the probing, if present
+	*/
+	if (data->probing_timer) {
+		g_source_remove(data->probing_timer);
+		data->probing_timer = 0;
 	}
 
-	if (data->mbim == STATE_PRESENT) {
-		mbim_device_shutdown(data->device);
+	if (data->online_timer) {
+		g_source_remove(data->online_timer);
+		data->online_timer = 0;
+	}
+
+	if (data->mbim == STATE_PRESENT) { // FIXME
+		mbim_device_shutdown(data->device.mbim);
+		mbim_device_unref(data->device.mbim); // FIXME
+		data->mbim = STATE_ABSENT;
 	}
 
 	if (data->qmi == STATE_PRESENT) {
-		qmi_device_unref(data->device);
+		qmi_device_unref(data->device.qmi);
 	}
 
 	if (data->app) {
@@ -1381,54 +1447,21 @@ static void gemalto_remove(struct ofono_modem *modem)
 		g_at_chat_cancel_all(data->app);
 		g_at_chat_unregister_all(data->app);
 		g_at_chat_unref(data->app);
+		if (data->mdm == data->app) {
+		  data->mdm = NULL;
+		}
 		data->app = NULL;
 	}
 
 	if (data->mdm) {
-		g_at_chat_cancel_all(data->app);
+		g_at_chat_cancel_all(data->mdm);
 		g_at_chat_unregister_all(data->mdm);
 		g_at_chat_unref(data->mdm);
 		data->mdm = NULL;
 	}
 
-	if (conn && path) {
-		if (g_dbus_unregister_interface(conn, path,
-					HARDWARE_MONITOR_INTERFACE))
-			ofono_modem_remove_interface(modem,
-					HARDWARE_MONITOR_INTERFACE);
-
-		if (g_dbus_unregister_interface(conn, path,
-					CINTERION_LEGACY_HWMON_INTERFACE))
-			ofono_modem_remove_interface(modem,
-					CINTERION_LEGACY_HWMON_INTERFACE);
-
-		if (g_dbus_unregister_interface(conn, path,
-					GEMALTO_NITZ_TIME_INTERFACE))
-			ofono_modem_remove_interface(modem,
-					GEMALTO_NITZ_TIME_INTERFACE);
-
-		if (g_dbus_unregister_interface(conn, path,
-					COMMAND_PASSTHROUGH_INTERFACE))
-			ofono_modem_remove_interface(modem,
-					COMMAND_PASSTHROUGH_INTERFACE);
-
-		if (g_dbus_unregister_interface(conn, path,
-					GNSS_INTERFACE))
-			ofono_modem_remove_interface(modem,
-					GNSS_INTERFACE);
-
-		if (g_dbus_unregister_interface(conn, path,
-					HARDWARE_CONTROL_INTERFACE))
-			ofono_modem_remove_interface(modem,
-					HARDWARE_CONTROL_INTERFACE);
-	}
-
-	//if (data->conn == GEMALTO_CONNECTION_SERIAL)
-	//	return;
-
 	ofono_modem_set_data(modem, NULL);
 	g_free(data);
-	remove_modem_notify(modem);
 }
 
 static void sim_ready_cb(gboolean present, gpointer user_data)
@@ -1452,10 +1485,10 @@ static void gemalto_ciev_simstatus_notify(GAtResultIter *iter,
 	struct ofono_sim *sim = data->sim;
 	int status;
 
-	DBG("sim status %d", status);
-
 	if (!g_at_result_iter_next_number(iter, &status))
 		return;
+
+	DBG("sim status %d", status);
 
 	switch (status) {
 	/* SIM is removed from the holder */
@@ -1465,6 +1498,7 @@ static void gemalto_ciev_simstatus_notify(GAtResultIter *iter,
 
 	/* SIM is inserted inside the holder */
 	case 1:
+		ofono_sim_inserted_notify(sim, TRUE);
 		/* The SIM won't be ready yet */
 		data->sim_state_query = at_util_sim_state_query_new(data->app,
 					1, 20, sim_ready_cb, modem,
@@ -1651,14 +1685,12 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	if (!data->app  && !data->mdm) {
 		DBG("no AT interface available. Removing this device.");
 		ofono_modem_set_powered(modem, FALSE);
-		data->hold_remove = FALSE;
 		return;
 	}
 
 	urcdest = "AT^SCFG=\"URC/DstIfc\",\"app\"";
 
 	if (!data->app) {
-		data->use_mdm_for_app = TRUE;
 		data->app = data->mdm;
 		urcdest = "AT^SCFG=\"URC/DstIfc\",\"mdm\"";
 	}
@@ -1718,7 +1750,7 @@ static void gemalto_initialize(struct ofono_modem *modem)
 
 	gemalto_set_cfun(data->app, 4, modem);
 	data->init_done = TRUE;
-	data->hold_remove = FALSE;
+	data->online_timer = 0;
 }
 
 #include <asm/ioctls.h>
@@ -1956,7 +1988,7 @@ static void mbim_subscriptions(struct ofono_modem *modem, gboolean subscribe)
 		/* unsubscribe all */
 		mbim_message_set_arguments(message, "av", 0);
 
-	mbim_device_send(md->device, 0, message, NULL, NULL, NULL);
+	mbim_device_send(md->device.mbim, 0, message, NULL, NULL, NULL);
 }
 
 
@@ -2037,7 +2069,7 @@ static void mbim_device_caps_info_cb(struct mbim_message *message, void *user)
 					"16yuu", mbim_uuid_stk, 1,
 					MBIM_CID_STK_PAC);
 
-	if (mbim_device_send(md->device, 0, message,
+	if (mbim_device_send(md->device.mbim, 0, message,
 				NULL, NULL, NULL)) {
 		md->mbim = STATE_PRESENT;
 		goto other_devices;
@@ -2045,7 +2077,7 @@ static void mbim_device_caps_info_cb(struct mbim_message *message, void *user)
 
 
 error:
-	mbim_device_shutdown(md->device);
+	mbim_device_shutdown(md->device.mbim);
 
 other_devices:
 
@@ -2064,7 +2096,7 @@ static void mbim_device_ready(void *user_data)
 					1, MBIM_COMMAND_TYPE_QUERY);
 
 	mbim_message_set_arguments(message, "");
-	mbim_device_send(md->device, 0, message, mbim_device_caps_info_cb,
+	mbim_device_send(md->device.mbim, 0, message, mbim_device_caps_info_cb,
 		modem, NULL);
 }
 
@@ -2088,10 +2120,10 @@ static void mbim_device_closed(void *user_data)
 	/* reset the state for future attempts */
 	md->mbim = STATE_PROBE;
 
- 	if(md->device)
-		mbim_device_unref(md->device);
+	if(md->device.mbim)
+		mbim_device_unref(md->device.mbim);
 
-	md->device = NULL;
+	md->device.mbim = NULL;
 }
 
 static int mbim_enable(struct ofono_modem *modem)
@@ -2120,23 +2152,22 @@ static int mbim_enable(struct ofono_modem *modem)
 	ioctl(fd, TIOCMBIS, &DTR_flag);
 
 	DBG("device: %s opened successfully", device);
-	md->device = mbim_device_new(fd, md->max_segment);
-	DBG("created new device %p", md->device);
+	md->device.mbim = mbim_device_new(fd, md->max_segment);
+	DBG("created new device %p", md->device.mbim);
 
-	mbim_device_set_close_on_unref(md->device, true);
-	mbim_device_set_max_outstanding(md->device, md->max_outstanding);
-	mbim_device_set_ready_handler(md->device,
+	mbim_device_set_close_on_unref(md->device.mbim, true);
+	mbim_device_set_max_outstanding(md->device.mbim, md->max_outstanding);
+	mbim_device_set_ready_handler(md->device.mbim,
 					mbim_device_ready, modem, NULL);
-	mbim_device_set_disconnect_handler(md->device,
+	mbim_device_set_disconnect_handler(md->device.mbim,
 				mbim_device_closed, modem, NULL);
-	mbim_device_set_debug(md->device, gemalto_mbim_debug, "MBIM:", NULL);
+	mbim_device_set_debug(md->device.mbim, gemalto_mbim_debug, "MBIM:", NULL);
 
 	return -EINPROGRESS;
 
 other_devices:
 
 	if (md->init_done) {
-		md->hold_remove = FALSE;
 		return 0;
 	}
 
@@ -2175,21 +2206,20 @@ static int qmi_enable(struct ofono_modem *modem)
 	ioctl(fd, TIOCSSERIAL, &new);
 	ioctl(fd, TIOCMBIS, &DTR_flag);
 
-	data->device = qmi_device_new(fd);
-	if (!data->device) {
+	data->device.qmi = qmi_device_new(fd);
+	if (!data->device.qmi) {
 		close(fd);
 		goto other_devices;
 	}
 
-	qmi_device_set_close_on_unref(data->device, true);
-	qmi_device_set_debug(data->device, gemalto_qmi_debug, "QMI: ");
-	qmi_device_discover(data->device, qmi_enable_cb, modem, NULL);
+	qmi_device_set_close_on_unref(data->device.qmi, true);
+	qmi_device_set_debug(data->device.qmi, gemalto_qmi_debug, "QMI: ");
+	qmi_device_discover(data->device.qmi, qmi_enable_cb, modem, NULL);
 	return -EINPROGRESS;
 
 other_devices:
 
 	if (data->init_done) {
-		data->hold_remove = FALSE;
 		return 0;
 	}
 
@@ -2364,7 +2394,6 @@ static void gemalto_detect_serial(gboolean success, struct ofono_modem *modem)
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 
 	if (!success) {
-		data->hold_remove = FALSE;
 		ofono_modem_set_powered(modem, FALSE);
 		return;
 	}
@@ -2394,11 +2423,9 @@ static void gemalto_detect_sysstart(GAtResult *result, gpointer user_data)
 
 static int gemalto_enable_serial(struct ofono_modem *modem)
 {
-	struct gemalto_data *data = ofono_modem_get_data(modem);
 	const char *device = ofono_modem_get_string(modem, "ATport");
 
 	if (!device) {
-		data->hold_remove = FALSE;
 		return -EINVAL;
 	}
 
@@ -2417,8 +2444,6 @@ static int gemalto_enable(struct ofono_modem *modem)
 
 	if (!modem || !data)
 		return -EINVAL;
-
-	data->hold_remove = TRUE;
 
 	data->conn = g_str_equal(conn_type,"Serial") ? GEMALTO_CONNECTION_SERIAL
 						: GEMALTO_CONNECTION_USB;
@@ -2485,11 +2510,9 @@ static void set_online_cb(gboolean ok, GAtResult *result, gpointer user_data)
 {
 	struct cb_data *cbd = user_data;
 	ofono_modem_online_cb_t cb = cbd->cb;
-	struct gemalto_data *data = ofono_modem_get_data(cbd->user);
 	struct ofono_error error;
 	decode_at_error(&error, g_at_result_final_response(result));
 	cb(&error, cbd->data);
-	data->hold_remove = FALSE;
 }
 
 static void gemalto_set_online_serial(struct ofono_modem *modem,
@@ -2522,7 +2545,6 @@ static void gemalto_set_online_serial(struct ofono_modem *modem,
 
 	CALLBACK_WITH_FAILURE(cb, cbd->data);
 	g_free(cbd);
-	data->hold_remove = FALSE;
 }
 
 static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
@@ -2532,7 +2554,6 @@ static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
 	struct cb_data *cbd = cb_data_new(cb, user_data);
 	char const *cmd = online ? "AT+CFUN=1" : "AT+CFUN=4";
 
-	data->hold_remove = TRUE;
 	cbd->user = modem;
 
 	if (data->conn == GEMALTO_CONNECTION_SERIAL) {
@@ -2552,7 +2573,6 @@ static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
 
 	CALLBACK_WITH_FAILURE(cb, cbd->data);
 	g_free(cbd);
-	data->hold_remove = FALSE;
 }
 
 static void gemalto_pre_sim(struct ofono_modem *modem)
@@ -2560,7 +2580,6 @@ static void gemalto_pre_sim(struct ofono_modem *modem)
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 
 	DBG("%p", modem);
-	data->hold_remove = TRUE;
 	gemalto_exec_stored_cmd(modem, "pre_sim");
 	ofono_location_reporting_create(modem, 0, "gemaltomodem", data->app);
 	data->sim = ofono_sim_create(modem, OFONO_VENDOR_GEMALTO,
@@ -2568,9 +2587,8 @@ static void gemalto_pre_sim(struct ofono_modem *modem)
 
 	if (data->sim && data->have_sim == TRUE)
 		ofono_sim_inserted_notify(data->sim, TRUE);
-
-	data->hold_remove = FALSE;
 }
+
 static int mbim_sim_probe(void *device)
 {
 	struct mbim_message *message;
@@ -2597,12 +2615,11 @@ static void gemalto_post_sim(struct ofono_modem *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 
-	data->hold_remove = TRUE;
 	gemalto_exec_stored_cmd(modem, "post_sim");
 
 	if (data->mbim == STATE_PRESENT) {
 		/* very important to set the interface ready */
-		mbim_sim_probe(data->device);
+		mbim_sim_probe(data->device.mbim);
 	}
 
 	ofono_phonebook_create(modem, 0, "atmodem", data->app);
@@ -2610,8 +2627,6 @@ static void gemalto_post_sim(struct ofono_modem *modem)
 
 	if (data->has_lte)
 		ofono_lte_create(modem, 0, "gemaltomodem", data->app);
-
-	data->hold_remove = FALSE;
 }
 
 static void cgdcont17_probe(gboolean ok, GAtResult *result, gpointer user_data)
@@ -2662,18 +2677,18 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 		ofono_gprs_set_cid_range(gprs, 0, data->max_sessions);
 		if (data->model == 0x65) {
 			struct gemalto_mbim_composite comp;
-			comp.device = data->device;
+			comp.device = data->device.mbim;
 			comp.chat = data->app;
 			comp.at_cid = 4;
 			gc = ofono_gprs_context_create(modem, 0, "gemaltomodemmbim", &comp);
 		} else /* model == 0x5d, 0x62 (standard mbim driver) */
-			gc = ofono_gprs_context_create(modem, 0, "mbim", data->device);
+			gc = ofono_gprs_context_create(modem, 0, "mbim", data->device.mbim);
 	} else if (data->qmi == STATE_PRESENT) {
 		gprs = ofono_gprs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem",
 								data->app);
 		ofono_gprs_set_cid_range(gprs, 1, 1);
 		gc = ofono_gprs_context_create(modem, 0, "qmimodem",
-								data->device);
+								data->device.qmi);
 	} else if (data->gprs_opt == USE_SWWAN || data->gprs_opt == USE_CTX17 ||
 						data->gprs_opt == USE_CTX3) {
 		ofono_modem_set_integer(modem, "GemaltoWwan",
@@ -2756,7 +2771,6 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 		ofono_message_waiting_register(mw);
 
 	data->netreg = ofono_netreg_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
-	data->hold_remove = FALSE;
 }
 
 static int gemalto_post_online_delayed(void *modem)
@@ -2797,8 +2811,7 @@ static void gemalto_post_online(struct ofono_modem *modem)
 	 * in this version of ofono we must wait for SIM 'really-ready'
 	 * can be avoided when capturing the right URCs
 	 */
-	data->hold_remove = TRUE;
-	g_timeout_add_seconds(5, gemalto_post_online_delayed, modem);
+	data->online_timer = g_timeout_add_seconds(5, gemalto_post_online_delayed, modem);
 }
 
 static void mbim_radio_off_for_disable(struct mbim_message *message, void *user)
@@ -2808,7 +2821,7 @@ static void mbim_radio_off_for_disable(struct mbim_message *message, void *user)
 
 	DBG("%p", modem);
 
-	mbim_device_shutdown(md->device);
+	mbim_device_shutdown(md->device.mbim);
 }
 
 static int gemalto_disable_serial(struct ofono_modem *modem)
@@ -2837,10 +2850,16 @@ static int gemalto_disable(struct ofono_modem *modem)
 	struct mbim_message *message;
 
 	DBG("%p", modem);
-	data->hold_remove = TRUE;
 
 	if (data->conn == GEMALTO_CONNECTION_SERIAL)
 		return gemalto_disable_serial(modem);
+
+	// Remove gemalto interfaces
+	gemalto_hardware_control_disable(modem);
+	gemalto_gnss_disable(modem);
+	gemalto_time_disable(modem);
+	gemalto_hardware_monitor_disable(modem);
+	gemalto_command_passthrough_disable(modem);
 
 	if (data->mbim == STATE_PRESENT) {
 		message = mbim_message_new(mbim_uuid_basic_connect,
@@ -2848,17 +2867,21 @@ static int gemalto_disable(struct ofono_modem *modem)
 						MBIM_COMMAND_TYPE_SET);
 		mbim_message_set_arguments(message, "u", 0);
 
-		if (mbim_device_send(data->device, 0, message,
-				mbim_radio_off_for_disable, modem, NULL)==0)
-			mbim_device_closed(modem);
+		mbim_device_send(data->device.mbim, 0, message,
+			mbim_radio_off_for_disable, modem, NULL);
+		mbim_device_shutdown(data->device.mbim);
+		mbim_device_unref(data->device.mbim);
+		data->device.mbim = NULL;
+		data->mbim = STATE_ABSENT;
 	}
 
 	if (data->app == NULL)
 		return 0;
 
+	// FIXME AT channel must be active for below to work
 	gemalto_exec_stored_cmd(modem, "disable");
 	gemalto_set_cfun(data->app, 41, modem);
-	data->hold_remove = FALSE;
+
 	return -EINPROGRESS;
 }
 
@@ -2886,3 +2909,4 @@ static void gemalto_exit(void)
 
 OFONO_PLUGIN_DEFINE(gemalto, "Gemalto modem plugin", VERSION,
 		OFONO_PLUGIN_PRIORITY_DEFAULT, gemalto_init, gemalto_exit)
+

@@ -94,6 +94,7 @@ struct ipv4_settings {
 	char *gateway;
 	char **dns;
 	char *proxy;
+	unsigned int mtu;
 };
 
 struct ipv6_settings {
@@ -101,6 +102,7 @@ struct ipv6_settings {
 	unsigned char prefix_len;
 	char *gateway;
 	char **dns;
+	unsigned int mtu;
 };
 
 struct context_settings {
@@ -411,6 +413,11 @@ static void context_settings_append_ipv4(struct context_settings *settings,
 		ofono_dbus_dict_append_array(&array, "DomainNameServers",
 						DBUS_TYPE_STRING,
 						&settings->ipv4->dns);
+
+	if (settings->ipv4->mtu)
+	  ofono_dbus_dict_append(&array, "Mtu",
+	        DBUS_TYPE_UINT32,
+	        &settings->ipv4->mtu);
 
 done:
 	dbus_message_iter_close_container(&variant, &array);
@@ -2887,6 +2894,17 @@ void ofono_gprs_context_set_ipv4_dns_servers(struct ofono_gprs_context *gc,
 	settings->ipv4->dns = g_strdupv((char **) dns);
 }
 
+void ofono_gprs_context_set_ipv4_mtu(struct ofono_gprs_context *gc,
+            unsigned int mtu)
+{
+	struct context_settings *settings = gc->settings;
+
+	if (settings->ipv4 == NULL)
+		return;
+
+	settings->ipv4->mtu = mtu;
+}
+
 void ofono_gprs_context_set_ipv6_address(struct ofono_gprs_context *gc,
 						const char *address)
 {
@@ -2932,6 +2950,17 @@ void ofono_gprs_context_set_ipv6_dns_servers(struct ofono_gprs_context *gc,
 
 	g_strfreev(settings->ipv6->dns);
 	settings->ipv6->dns = g_strdupv((char **) dns);
+}
+
+void ofono_gprs_context_set_ipv6_mtu(struct ofono_gprs_context *gc,
+            unsigned int mtu)
+{
+	struct context_settings *settings = gc->settings;
+
+	if (settings->ipv6 == NULL)
+		return;
+
+	settings->ipv6->mtu = mtu;
 }
 
 int ofono_gprs_driver_register(const struct ofono_gprs_driver *d)
