@@ -233,6 +233,11 @@ Properties	boolean Active [readwrite]
 					"static"- Set IP network statically
 					"dhcp"  - Set IP network through DHCP
 
+			uint32 Mtu [readonly, optional]
+
+				Holds the MTU for this interface, as reported
+				by the network.
+
 			string Address [readonly, optional]
 
 				Holds the IP address for this context.
@@ -278,6 +283,11 @@ Properties	boolean Active [readwrite]
 
 				Holds the interface of the network interface
 				used by this context (e.g. "ppp0" "usb0")
+
+			uint32 Mtu [readonly, optional]
+
+				Holds the MTU for this interface, as reported
+				by the network.
 
 			string Address [readonly, optional]
 

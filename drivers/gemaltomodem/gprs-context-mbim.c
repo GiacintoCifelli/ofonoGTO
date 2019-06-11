@@ -288,9 +288,9 @@ ipv6:
 		}
 	}
 
-  if (ipv6_config_available & 0x8) { /* IPv6 mtu info */
-    ofono_gprs_context_set_ipv6_mtu(gc, ipv6_mtu);
-  }
+	if (ipv6_config_available & 0x8) { /* IPv6 mtu info */
+		ofono_gprs_context_set_ipv6_mtu(gc, ipv6_mtu);
+	}
 
 done:
 

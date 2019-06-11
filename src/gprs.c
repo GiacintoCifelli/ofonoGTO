@@ -415,9 +415,8 @@ static void context_settings_append_ipv4(struct context_settings *settings,
 						&settings->ipv4->dns);
 
 	if (settings->ipv4->mtu)
-	  ofono_dbus_dict_append(&array, "Mtu",
-	        DBUS_TYPE_UINT32,
-	        &settings->ipv4->mtu);
+		ofono_dbus_dict_append(&array, "Mtu", DBUS_TYPE_UINT32,
+					&settings->ipv4->mtu);
 
 done:
 	dbus_message_iter_close_container(&variant, &array);
@@ -483,6 +482,9 @@ static void context_settings_append_ipv6(struct context_settings *settings,
 		ofono_dbus_dict_append_array(&array, "DomainNameServers",
 						DBUS_TYPE_STRING,
 						&settings->ipv6->dns);
+	if (settings->ipv6->mtu)
+		ofono_dbus_dict_append(&array, "Mtu", DBUS_TYPE_UINT32,
+					&settings->ipv6->mtu);
 
 done:
 	dbus_message_iter_close_container(&variant, &array);
