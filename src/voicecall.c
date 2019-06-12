@@ -591,7 +591,7 @@ static DBusMessage *voicecall_hangup(DBusConnection *conn,
 		}
 
 		/*
-		 * We check if we have a single alerting, dialing or activeo
+		 * We check if we have a single alerting, dialing or active
 		 * call and try to hang it up with hangup_all or hangup_active
 		 */
 

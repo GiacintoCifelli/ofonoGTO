@@ -52,11 +52,18 @@ static const char *smoni_prefix[] = { "^SMONI:", NULL };
 static const char *zpas_prefix[] = { "+ZPAS:", NULL };
 static const char *option_tech_prefix[] = { "_OCTI:", "_OUWCTI:", NULL };
 
+enum at_command_support {
+	AT_COMMAND_SUPPORTED = 0,
+	AT_COMMAND_NOT_SUPPORTED = 1,
+	AT_COMMAND_SUPPORT_UNKNOWN = 2
+};
+
 struct netreg_data {
 	GAtChat *chat;
 	char mcc[OFONO_MAX_MCC_LENGTH + 1];
 	char mnc[OFONO_MAX_MNC_LENGTH + 1];
 	unsigned int csq_source;
+	enum at_command_support supports_cesq;
 	int signal_index; /* If strength is reported via CIND */
 	int signal_min; /* min strength reported via CIND */
 	int signal_max; /* max strength reported via CIND */
@@ -665,8 +672,10 @@ static void csq_notify(GAtResult *result, gpointer user_data)
 	if (!g_at_result_iter_next_number(&iter, &strength))
 		return;
 
-	ofono_netreg_strength_notify(netreg,
+	if (ofono_netreg_get_technology(netreg) != ACCESS_TECHNOLOGY_EUTRAN) {
+		ofono_netreg_strength_notify(netreg,
 				at_util_convert_signal_strength(strength));
+	}
 }
 
 static void cesq_notify(GAtResult *result, gpointer user_data)
@@ -674,6 +683,7 @@ static void cesq_notify(GAtResult *result, gpointer user_data)
 	struct ofono_netreg *netreg = user_data;
 	int strength_GSM, strength_UTRAN, strength_EUTRAN;
 	GAtResultIter iter;
+	struct netreg_data *nd = ofono_netreg_get_data(netreg);
 
 	g_at_result_iter_init(&iter, result);
 
@@ -704,6 +714,7 @@ static void cesq_notify(GAtResult *result, gpointer user_data)
 	if (!g_at_result_iter_next_number(&iter, &strength_EUTRAN))
 		return;
 
+	nd->supports_cesq = AT_COMMAND_SUPPORTED;
 	ofono_netreg_strength_notify(netreg,
 				at_util_convert_signal_strength_cesq(strength_GSM, strength_UTRAN, strength_EUTRAN));
 }
@@ -924,7 +935,6 @@ static void gemalto_ciev_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_netreg *netreg = user_data;
 	struct netreg_data *nd = ofono_netreg_get_data(netreg);
-	const char *signal_identifier = "rssi";
 	const char *ind_str;
 	int strength;
 	GAtResultIter iter;
@@ -937,20 +947,28 @@ static void gemalto_ciev_notify(GAtResult *result, gpointer user_data)
 	if (!g_at_result_iter_next_unquoted_string(&iter, &ind_str))
 		return;
 
-	if (!g_str_equal(signal_identifier, ind_str))
-		return;
+	if (g_str_equal("ceer", ind_str)) {
 
-	if (!g_at_result_iter_next_number(&iter, &strength))
-		return;
+	  if (!g_at_result_iter_skip_next(&iter))
+	    return;
 
-	DBG("rssi %d", strength);
+	  if (!g_at_result_iter_next_string(&iter, &ind_str))
+	    return;
 
-	if (strength == nd->signal_invalid)
-		strength = -1;
-	else
-		strength = (strength * 100) / (nd->signal_max - nd->signal_min);
+	  ofono_netreg_reject_cause_notify(netreg, ind_str);
+	}
+	else if (g_str_equal("rssi", ind_str)) {
 
-	ofono_netreg_strength_notify(netreg, strength);
+	  if (!g_at_result_iter_next_number(&iter, &strength))
+      return;
+
+    if (strength == nd->signal_invalid)
+      strength = -1;
+    else
+      strength = (strength * 100) / (nd->signal_max - nd->signal_min);
+
+    ofono_netreg_strength_notify(netreg, strength);
+	}
 }
 
 static void ctzv_notify(GAtResult *result, gpointer user_data)
@@ -1917,8 +1935,20 @@ static gboolean gemalto_csq_query(gpointer user_data)
 	struct ofono_netreg *netreg = user_data;
 	struct netreg_data *nd = ofono_netreg_get_data(netreg);
 
-	g_at_chat_send(nd->chat, "AT+CSQ", none_prefix, NULL, NULL, NULL);
-	g_at_chat_send(nd->chat, "AT+CESQ", none_prefix, NULL, NULL, NULL);
+	switch (nd->supports_cesq)
+	{
+	case AT_COMMAND_SUPPORT_UNKNOWN:
+		/* Default it to AT_COMMAND_NOT_SUPPORTED and test AT+CESQ */
+		nd->supports_cesq = AT_COMMAND_NOT_SUPPORTED;
+		g_at_chat_send(nd->chat, "AT+CESQ", none_prefix, NULL, NULL, NULL);
+		break;
+	case AT_COMMAND_SUPPORTED:
+		g_at_chat_send(nd->chat, "AT+CESQ", none_prefix, NULL, NULL, NULL);
+		break;
+	case AT_COMMAND_NOT_SUPPORTED:
+		g_at_chat_send(nd->chat, "AT+CSQ", none_prefix, NULL, NULL, NULL);
+		break;
+	}
 
 	return TRUE;
 }
@@ -2116,6 +2146,9 @@ static void at_creg_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
 						FALSE, netreg, NULL);
 		g_at_chat_register(nd->chat, "+CESQ:", cesq_notify,
 						FALSE, netreg, NULL);
+		/* Activate reject cause report */
+		g_at_chat_send(nd->chat, "AT^SIND=\"ceer\",1,99", none_prefix,
+	      NULL, NULL, NULL);
 
 		manage_csq_source(netreg, TRUE);
 
@@ -2205,6 +2238,7 @@ static int at_netreg_probe(struct ofono_netreg *netreg, unsigned int vendor,
 
 	nd->chat = g_at_chat_clone(chat);
 	nd->vendor = vendor;
+	nd->supports_cesq = AT_COMMAND_SUPPORT_UNKNOWN;
 	nd->tech = -1;
 	nd->time.sec = -1;
 	nd->time.min = -1;

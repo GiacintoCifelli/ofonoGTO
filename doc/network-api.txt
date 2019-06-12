@@ -141,6 +141,11 @@ Properties	string Mode [readonly]
 			unavailable, this property will not be returned by
 			GetProperties or will be set to an empty string.
 
+		string RejectCause [readonly, optional]
+
+			Contains the current network reject cause after a failure
+			to register or activate a context on the network.
+
 
 Network operator hierarchy
 ==========================

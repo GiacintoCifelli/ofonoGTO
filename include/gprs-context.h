@@ -106,6 +106,8 @@ void ofono_gprs_context_set_ipv4_gateway(struct ofono_gprs_context *gc,
 						const char *gateway);
 void ofono_gprs_context_set_ipv4_dns_servers(struct ofono_gprs_context *gc,
 						const char **dns);
+void ofono_gprs_context_set_ipv4_mtu(struct ofono_gprs_context *gc,
+           unsigned int mtu);
 
 void ofono_gprs_context_set_ipv6_address(struct ofono_gprs_context *gc,
 						const char *address);
@@ -115,6 +117,8 @@ void ofono_gprs_context_set_ipv6_gateway(struct ofono_gprs_context *gc,
 						const char *gateway);
 void ofono_gprs_context_set_ipv6_dns_servers(struct ofono_gprs_context *gc,
 						const char **dns);
+void ofono_gprs_context_set_ipv6_mtu(struct ofono_gprs_context *gc,
+           unsigned int mtu);
 #ifdef __cplusplus
 }
 #endif

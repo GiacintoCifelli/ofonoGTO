@@ -44,6 +44,8 @@
 #define NETWORK_REGISTRATION_FLAG_ROAMING_SHOW_SPN	0x2
 #define NETWORK_REGISTRATION_FLAG_READING_PNN		0x4
 
+#define MAX_REJECT_CAUSE_LENGTH 80
+
 enum network_registration_mode {
 	NETWORK_REGISTRATION_MODE_AUTO =	0,
 	NETWORK_REGISTRATION_MODE_MANUAL =	2,
@@ -69,6 +71,7 @@ struct ofono_netreg {
 	struct ofono_sim_context *sim_context;
 	GKeyFile *settings;
 	char *imsi;
+	char reject_cause[MAX_REJECT_CAUSE_LENGTH];
 	struct ofono_watchlist *status_watches;
 	const struct ofono_netreg_driver *driver;
 	void *driver_data;
@@ -784,7 +787,7 @@ static DBusMessage *network_get_properties(DBusConnection *conn,
 	DBusMessageIter dict;
 
 	const char *status = registration_status_to_string(netreg->status);
-	const char *operator;
+	const char *operator, *cause;
 	const char *mode = registration_mode_to_string(netreg->mode);
 
 	reply = dbus_message_new_method_return(msg);
@@ -847,6 +850,9 @@ static DBusMessage *network_get_properties(DBusConnection *conn,
 	if (netreg->base_station)
 		ofono_dbus_dict_append(&dict, "BaseStation", DBUS_TYPE_STRING,
 					&netreg->base_station);
+
+	cause = netreg->reject_cause;
+	ofono_dbus_dict_append(&dict, "RejectCause", DBUS_TYPE_STRING, &cause);
 
 	dbus_message_iter_close_container(&iter, &dict);
 
@@ -1521,6 +1527,19 @@ static void notify_emulator_strength(struct ofono_atom *atom, void *data)
 		val = (GPOINTER_TO_INT(data) - 1) / 20 + 1;
 
 	ofono_emulator_set_indicator(em, OFONO_EMULATOR_IND_SIGNAL, val);
+}
+
+void ofono_netreg_reject_cause_notify(struct ofono_netreg *netreg, const char* reject_cause)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = __ofono_atom_get_path(netreg->atom);
+
+	g_strlcpy(netreg->reject_cause, reject_cause, sizeof(netreg->reject_cause));
+
+	ofono_dbus_signal_property_changed(conn, path,
+					OFONO_NETWORK_REGISTRATION_INTERFACE,
+					"RejectCause", DBUS_TYPE_STRING,
+					&reject_cause);
 }
 
 void ofono_netreg_strength_notify(struct ofono_netreg *netreg, int strength)

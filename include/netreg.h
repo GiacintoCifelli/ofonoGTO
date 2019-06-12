@@ -93,6 +93,7 @@ void ofono_netreg_status_notify(struct ofono_netreg *netreg, int status,
 					int lac, int ci, int tech);
 void ofono_netreg_time_notify(struct ofono_netreg *netreg,
 				struct ofono_network_time *info);
+void ofono_netreg_reject_cause_notify(struct ofono_netreg *netreg, const char* reject_cause);
 
 int ofono_netreg_driver_register(const struct ofono_netreg_driver *d);
 void ofono_netreg_driver_unregister(const struct ofono_netreg_driver *d);
