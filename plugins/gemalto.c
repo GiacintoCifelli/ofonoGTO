@@ -1470,9 +1470,15 @@ static void sim_ready_cb(gboolean present, gpointer user_data)
 	at_util_sim_state_query_free(data->sim_state_query);
 	data->sim_state_query = NULL;
 
-	DBG("sim present: %d", present);
-
 	ofono_sim_inserted_notify(sim, present);
+}
+
+static int gemalto_ciev_simstatus_delayed(void *modem) {
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	data->sim_state_query = at_util_sim_state_query_new(data->app,
+				1, 20, sim_ready_cb, modem,
+				NULL);
+	return FALSE; /* to kill the timer */
 }
 
 static void gemalto_ciev_simstatus_notify(GAtResultIter *iter,
@@ -1495,11 +1501,8 @@ static void gemalto_ciev_simstatus_notify(GAtResultIter *iter,
 
 	/* SIM is inserted inside the holder */
 	case 1:
-		ofono_sim_inserted_notify(sim, TRUE);
-		/* The SIM won't be ready yet */
-		data->sim_state_query = at_util_sim_state_query_new(data->app,
-					1, 20, sim_ready_cb, modem,
-					NULL);
+		/* delay for 2 seconds the AT+CPIN? check, to make sure the sim is powered, otherwise we can get a SIM failure (error 13) */
+		g_timeout_add_seconds(2, gemalto_ciev_simstatus_delayed, modem);
 		break;
 
 	/* USIM initialization completed. UE has finished reading USIM data. */
