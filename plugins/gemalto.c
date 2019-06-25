@@ -1481,8 +1481,16 @@ static int gemalto_ciev_simstatus_delayed(void *modem) {
 	return FALSE; /* to kill the timer */
 }
 
-static void gemalto_ciev_simstatus_notify(GAtResultIter *iter,
-					struct ofono_modem *modem)
+static void gemalto_pbready_notify(GAtResult *result, gpointer user_data) {
+	struct ofono_modem *modem = user_data;
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	struct ofono_sim *sim = data->sim;
+	DBG();
+	ofono_sim_initialized_notify(sim);
+}
+
+
+static void gemalto_ciev_simstatus_notify(GAtResultIter *iter, struct ofono_modem *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	struct ofono_sim *sim = data->sim;
@@ -1574,6 +1582,8 @@ static void sim_state_cb(gboolean present, gpointer user_data)
 	/* Register for specific sim status reports */
 	g_at_chat_register(data->app, "+CIEV:",
 			gemalto_ciev_notify, FALSE, modem, NULL);
+	g_at_chat_register(data->app, "+PBREADY",
+			gemalto_pbready_notify, FALSE, modem, NULL);
 
 	g_at_chat_send(data->app, "AT^SIND=\"simstatus\",1", none_prefix,
 			NULL, NULL, NULL);
