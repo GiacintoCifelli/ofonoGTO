@@ -2695,7 +2695,7 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 			struct gemalto_mbim_composite comp;
 			comp.device = data->mbimd;
 			comp.chat = data->app;
-			comp.at_cid = 4;
+			comp.at_cid = 6;
 			gc = ofono_gprs_context_create(modem, 0, "gemaltomodemmbim", &comp);
 		} else /* model == 0x5d, 0x62 (standard mbim driver) */
 			gc = ofono_gprs_context_create(modem, 0, "mbim", data->mbimd);
