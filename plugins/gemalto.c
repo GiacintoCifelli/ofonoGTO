@@ -147,6 +147,7 @@ struct gemalto_data {
 	guint model;
 	guint probing_timer;
 	guint init_waiting_time;
+	guint port_answers;
 	guint waiting_time;
 	guint online_timer;
 
@@ -1833,6 +1834,7 @@ static int gemalto_probe_device(void *user_data)
 
 	if (data->waiting_time > data->init_waiting_time+3) {
 		data->waiting_time = 0;
+		data->port_answers = 0;
 		goto failed;
 	}
 
@@ -1845,8 +1847,11 @@ static int gemalto_probe_device(void *user_data)
 		goto failed;
 
 	if(!strstr(buf, "OK")) {
-		data->probing_timer = g_timeout_add_seconds(1,
-						gemalto_probe_device, modem);
+		data->probing_timer = g_timeout_add_seconds(1, gemalto_probe_device, modem);
+		return TRUE; /* keep waiting */
+	} else if (getenv("OFONO_GTO_3SURE") && data->port_answers++<3) { /* patch for ports answering a single time and then not anymore (eg: PLS8 in SSRVSET=4 on 1st ACM port) */
+		data->waiting_time--; /* don't increase the timer for this test */
+		data->probing_timer = g_timeout_add_seconds(1, gemalto_probe_device, modem);
 		return TRUE; /* keep waiting */
 	}
 
@@ -1928,6 +1933,7 @@ static void gemalto_open_device(const char *device,
 	g_io_channel_set_buffered(data->channel, FALSE);
 	data->open_cb = func;
 	data->portfd = fd;
+	data->port_answers = 0;
 	data->probing_timer = g_timeout_add_seconds(1, gemalto_probe_device,
 									modem);
 }
