@@ -2515,6 +2515,9 @@ static int gemalto_enable(struct ofono_modem *modem)
 		data->mbim = STATE_PROBE;
 	}
 
+	if (m == 0x62) /* remove the modem port for this enumeration (connected on ASC0) */
+		ofono_modem_set_string(modem, "Modem", NULL);
+
 	set_from_model(data);
 
 	if ((data->mbim == STATE_PROBE) && ctl && net) {
