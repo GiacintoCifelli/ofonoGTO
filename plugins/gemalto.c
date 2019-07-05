@@ -1414,6 +1414,14 @@ static void gemalto_remove(struct ofono_modem *modem)
 	if (!data)
 		return;
 
+	if(getenv("OFONO_GTO_KEEP_INTF")) { /* Remove gemalto interfaces */
+		gemalto_hardware_control_disable(modem);
+		gemalto_gnss_disable(modem);
+		gemalto_time_disable(modem);
+		gemalto_hardware_monitor_disable(modem);
+		gemalto_command_passthrough_disable(modem);
+	}
+
 	/*
 	 * Stop the probing, if present
 	*/
@@ -2870,12 +2878,13 @@ static int gemalto_disable(struct ofono_modem *modem)
 	if (data->conn == GEMALTO_CONNECTION_SERIAL)
 		return gemalto_disable_serial(modem);
 
-	// Remove gemalto interfaces
-	gemalto_hardware_control_disable(modem);
-	gemalto_gnss_disable(modem);
-	gemalto_time_disable(modem);
-	gemalto_hardware_monitor_disable(modem);
-	gemalto_command_passthrough_disable(modem);
+	if(!getenv("OFONO_GTO_KEEP_INTF")) { /* Remove gemalto interfaces */
+		gemalto_hardware_control_disable(modem);
+		gemalto_gnss_disable(modem);
+		gemalto_time_disable(modem);
+		gemalto_hardware_monitor_disable(modem);
+		gemalto_command_passthrough_disable(modem);
+	}
 
 	if (data->mbim == STATE_PRESENT) {
 		message = mbim_message_new(mbim_uuid_basic_connect,
