@@ -2136,22 +2136,12 @@ static void at_creg_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		nd->signal_min = 0;
 		nd->signal_max = 5;
 		nd->signal_invalid = 99;
-		/* Register for specific signal strength reports */
-		g_at_chat_register(nd->chat, "+CIEV:",
-				gemalto_ciev_notify, FALSE, netreg, NULL);
-		g_at_chat_send(nd->chat, "AT^SIND=\"rssi\",1", none_prefix,
-				NULL, NULL, NULL);
-		/* Register for +CSQ and +CESQ and then poll them periodically */
-		g_at_chat_register(nd->chat, "+CSQ:", csq_notify,
-						FALSE, netreg, NULL);
-		g_at_chat_register(nd->chat, "+CESQ:", cesq_notify,
-						FALSE, netreg, NULL);
-		/* Activate reject cause report */
-		g_at_chat_send(nd->chat, "AT^SIND=\"ceer\",1,99", none_prefix,
-	      NULL, NULL, NULL);
-
-		manage_csq_source(netreg, TRUE);
-
+		g_at_chat_register(nd->chat, "+CIEV:", gemalto_ciev_notify, FALSE, netreg, NULL);
+		g_at_chat_send(nd->chat, "AT^SIND=\"rssi\",1", none_prefix, NULL, NULL, NULL); /* Register for specific signal strength reports */
+		g_at_chat_register(nd->chat, "+CSQ:", csq_notify, FALSE, netreg, NULL); /* Register for +CSQ */
+		g_at_chat_register(nd->chat, "+CESQ:", cesq_notify, FALSE, netreg, NULL); /* Register for +CESQ */
+		manage_csq_source(netreg, TRUE); /* start periodic polling of CSQ/CESQ */
+		g_at_chat_send(nd->chat, "AT^SIND=\"ceer\",1,99", none_prefix, NULL, NULL, NULL); /* Activate reject cause report */
 		break;
 	case OFONO_VENDOR_NOKIA:
 	case OFONO_VENDOR_SAMSUNG:
@@ -2176,8 +2166,7 @@ void manage_csq_source(struct ofono_netreg *netreg, gboolean add)
 		nd->csq_source = 0;
 	}
 	if(add)
-		nd->csq_source = g_timeout_add_seconds(5,
-						gemalto_csq_query, netreg);
+		nd->csq_source = g_timeout_add_seconds(5, gemalto_csq_query, netreg);
 }
 
 
@@ -2259,15 +2248,12 @@ static int at_netreg_probe(struct ofono_netreg *netreg, unsigned int vendor,
 static void at_netreg_remove(struct ofono_netreg *netreg)
 {
 	struct netreg_data *nd = ofono_netreg_get_data(netreg);
-
 	if (nd->nitz_timeout)
 		g_source_remove(nd->nitz_timeout);
-
 	if (nd->csq_source)
 		g_source_remove(nd->csq_source);
-
+	nd->csq_source = 0;
 	ofono_netreg_set_data(netreg, NULL);
-
 	g_at_chat_unref(nd->chat);
 	g_free(nd);
 }
