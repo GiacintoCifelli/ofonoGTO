@@ -1495,7 +1495,7 @@ static void gemalto_pbready_notify(GAtResult *result, gpointer user_data) {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	struct ofono_sim *sim = data->sim;
 	DBG();
-	ofono_sim_initialized_notify(sim);
+	ofono_sim_inserted_notify(sim, true);
 }
 
 
