@@ -758,13 +758,30 @@ static gboolean setup_simcom(struct modem_info *modem)
 	return TRUE;
 }
 
+static gboolean setup_zte_vanilla(struct modem_info *modem)
+{
+	const char *aux=NULL, *net=NULL;
+	GSList *list;
+	for (list = modem->devices; list; list = list->next) {
+		struct device_info *info = list->data;
+		DBG("node:%s, sub:%s, interface:%s, number:%s, sysattr:%s", info->devnode, info->subsystem, info->interface, info->number, info->sysattr);
+		if(g_strcmp0(info->interface, "255/255/255")==0 && g_strcmp0(info->number, "02")==0)
+			aux=info->devnode;
+		else if(g_strcmp0(info->interface, "2/6/0")==0) // uses adb enum for cdc_ether interface!
+			net=info->devnode;
+	}
+	DBG("aux=%s, net=%s", aux, net);
+	if(aux==NULL || net==NULL) return FALSE;
+	ofono_modem_set_string(modem->modem, "Aux", aux);
+	ofono_modem_set_string(modem->modem, "Net", net);
+	return TRUE;
+}
+
 static gboolean setup_zte(struct modem_info *modem)
 {
 	const char *aux = NULL, *mdm = NULL, *qcdm = NULL;
 	const char *modem_intf;
 	GSList *list;
-
-	DBG("%s", modem->syspath);
 
 	if (g_strcmp0(modem->model, "0016") == 0 ||
 				g_strcmp0(modem->model, "0017") == 0 ||
@@ -1343,6 +1360,7 @@ static struct {
 	{ "simcom",	setup_simcom	},
 	{ "sim7100",	setup_sim7100	},
 	{ "zte",	setup_zte	},
+	{ "zte_vanilla",setup_zte_vanilla},
 	{ "icera",	setup_icera	},
 	{ "samsung",	setup_samsung	},
 	{ "quectel",	setup_quectel	},
@@ -1715,6 +1733,8 @@ static struct {
 	{ "alcatel",	"option",	"1bbb", "0017"	},
 	{ "novatel",	"option",	"1410"		},
 	{ "zte",	"option",	"19d2"		},
+	{ "zte_vanilla","option",	"19d2", "0199"	},
+	{ "zte_vanilla","cdc_ether",	"19d2", "0199"	},
 	{ "simcom",	"option",	"05c6", "9000"	},
 	{ "sim7100",	"option",	"1e0e", "9001"	},
 	{ "telit",	"usbserial",	"1bc7"		},

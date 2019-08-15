@@ -34,7 +34,9 @@
 #include "gatresult.h"
 
 #include "atmodem.h"
+#include "vendor.h"
 
+static const char *none_prefix[] = { NULL };
 static const char *gcap_prefix[] = { "+GCAP:", NULL };
 
 static void attr_cb(gboolean ok, GAtResult *result, gpointer user_data)
@@ -135,12 +137,11 @@ static int at_devinfo_probe(struct ofono_devinfo *info, unsigned int vendor,
 				void *data)
 {
 	GAtChat *chat = g_at_chat_clone(data);
-
 	ofono_devinfo_set_data(info, chat);
-
-	g_at_chat_send(chat, "AT+GCAP", gcap_prefix,
-				capability_cb, info, NULL);
-
+	if(vendor==OFONO_VENDOR_ZTE_VANILLA)
+		g_at_chat_send(chat, "AT", none_prefix, capability_cb, info, NULL);
+	else
+		g_at_chat_send(chat, "AT+GCAP", gcap_prefix, capability_cb, info, NULL);
 	return 0;
 }
 
