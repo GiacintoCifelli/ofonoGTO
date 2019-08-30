@@ -215,6 +215,8 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 	if (!g_at_result_iter_next_unquoted_string(&iter, &event))
 		return;
 
+	DBG("%s", event);
+
 	if (!g_str_has_prefix(event, "NW DEACT"))
 		return;
 
