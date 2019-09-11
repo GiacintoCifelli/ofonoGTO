@@ -43,6 +43,7 @@
 #include <ofono/gprs-context.h>
 #include <ofono/phonebook.h>
 #include <ofono/log.h>
+#include <ofono/lte.h>
 
 #include <drivers/atmodem/atutil.h>
 #include <drivers/atmodem/vendor.h>
@@ -260,7 +261,7 @@ static void zte_pre_sim(struct ofono_modem *modem)
 	DBG("%p", modem);
 
 	ofono_devinfo_create(modem, OFONO_VENDOR_ZTE_VANILLA, "atmodem", data->aux);
-	sim = ofono_sim_create(modem, 0 /*OFONO_VENDOR_ZTE*/, "atmodem", data->aux);
+	sim = ofono_sim_create(modem, OFONO_VENDOR_ZTE_VANILLA, "atmodem", data->aux);
 
 	if (sim && data->have_sim == TRUE)
 		ofono_sim_inserted_notify(sim, TRUE);
@@ -269,36 +270,32 @@ static void zte_pre_sim(struct ofono_modem *modem)
 static void zte_post_sim(struct ofono_modem *modem)
 {
 	struct zte_data *data = ofono_modem_get_data(modem);
+	DBG("%p", modem);
+	ofono_phonebook_create(modem, 0, "atmodem", data->aux);
+	ofono_sms_create(modem, 0, "atmodem", data->aux);
+	//ofono_lte_create(modem, 0, "ztevmodem", data->app); // to be created
+	ofono_lte_create(modem, 0, "atmodem", data->aux); // to be replaced by previous line
+}
+
+static void zte_post_online(struct ofono_modem *modem) // untested
+{
+	struct zte_data *data = ofono_modem_get_data(modem);
 	struct ofono_gprs *gprs;
 	struct ofono_gprs_context *gc;
-
 	DBG("%p", modem);
+	ofono_netreg_create(modem, 0 /*OFONO_VENDOR_ZTE*/, "atmodem", data->aux);
+	ofono_cbs_create(modem, OFONO_VENDOR_QUALCOMM_MSM, "atmodem", data->aux);
+	ofono_ussd_create(modem, OFONO_VENDOR_QUALCOMM_MSM, "atmodem", data->aux);
 
-	ofono_phonebook_create(modem, 0, "atmodem", data->aux);
-
-	ofono_sms_create(modem, 0 /*OFONO_VENDOR_ZTE*/, "atmodem", data->aux);
-
-	gprs = ofono_gprs_create(modem, 0 /*OFONO_VENDOR_ZTE*/, "atmodem", data->aux);
+	gprs = ofono_gprs_create(modem, OFONO_VENDOR_ZTE_VANILLA, "atmodem", data->aux);
 	// to be recraft with the cdc_ether port
-//	gc = ofono_gprs_context_create(modem, 0 /*OFONO_VENDOR_ZTE*/, "atmodem", data->modem);
+	//gc = ofono_gprs_context_create(modem, OFONO_VENDOR_ZTE_VANILLA, "atmodem", data->modem); // use ZCACT
+	//gc = ofono_gprs_context_create(modem, 0, "ztevmodem", data->modem); // alternative possibility use ZCACT
 	gc = NULL;
 
 	if (gprs && gc)
 		ofono_gprs_add_context(gprs, gc);
-}
 
-static void zte_post_online(struct ofono_modem *modem)
-{
-	struct zte_data *data = ofono_modem_get_data(modem);
-
-	DBG("%p", modem);
-
-	ofono_netreg_create(modem, 0 /*OFONO_VENDOR_ZTE*/, "atmodem", data->aux);
-
-	ofono_cbs_create(modem, OFONO_VENDOR_QUALCOMM_MSM,
-					"atmodem", data->aux);
-	ofono_ussd_create(modem, OFONO_VENDOR_QUALCOMM_MSM,
-					"atmodem", data->aux);
 }
 
 static struct ofono_modem_driver zte_driver = {

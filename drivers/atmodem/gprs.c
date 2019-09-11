@@ -808,6 +808,9 @@ static void gprs_initialized(struct ofono_gprs *gprs)
 		g_at_chat_send(gd->chat, "AT^SIND=\"psinfo\",1", none_prefix,
 			NULL, NULL, NULL);
 		break;
+	case OFONO_VENDOR_ZTE_VANILLA:
+		/* URC "+CGEV:" comes automatically */
+		break;
 	default:
 		g_at_chat_send(gd->chat, "AT+CGEREP=2,1", none_prefix,
 			NULL, NULL, NULL);
