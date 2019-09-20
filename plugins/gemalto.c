@@ -1151,9 +1151,6 @@ static void gemalto_powersave_cb(gboolean ok, GAtResult *result,
 static void mbim_subscriptions(struct ofono_modem *modem, gboolean subscribe);
 void manage_csq_source(struct ofono_netreg *netreg, gboolean add);
 
-
-static int mbim_disable(struct ofono_modem *modem);
-
 static DBusMessage *hc_set_property(DBusConnection *conn,
 					DBusMessage *msg, void *user_data)
 {
@@ -1203,9 +1200,6 @@ static DBusMessage *hc_set_property(DBusConnection *conn,
 
 	if(data->mbim == STATE_PRESENT)
 		mbim_subscriptions(modem, !enable);
-
-	if(enable && getenv("OFONO_GTO_OFF_WHEN_POWERSAVE"))
-		mbim_disable(modem);
 
 	if (!g_at_chat_send(data->app, "AT", none_prefix,
 				gemalto_powersave_cb, modem, NULL))
@@ -2154,27 +2148,6 @@ static void mbim_device_closed(void *user_data)
 		mbim_device_unref(md->mbimd);
 
 	md->mbimd = NULL;
-}
-
-static void mbim_radio_off_for_disable(struct mbim_message *message, void *user);
-static int mbim_disable(struct ofono_modem *modem)
-{
-	struct gemalto_data *md = ofono_modem_get_data(modem);
-	struct mbim_message *message;
-
-	DBG("%p", modem);
-
-	message = mbim_message_new(mbim_uuid_basic_connect,
-					MBIM_CID_RADIO_STATE,
-					MBIM_COMMAND_TYPE_SET);
-	mbim_message_set_arguments(message, "u", 0);
-
-	if (mbim_device_send(md->mbimd, 0, message,
-				mbim_radio_off_for_disable, modem, NULL) > 0)
-		return -EINPROGRESS;
-
-	mbim_device_closed(modem);
-	return 0;
 }
 
 static int mbim_enable(struct ofono_modem *modem)
