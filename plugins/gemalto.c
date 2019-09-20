@@ -167,6 +167,7 @@ struct gemalto_data {
 
 	struct ofono_netreg *netreg;
 
+	int mbimfd;
 	struct mbim_device *mbimd;
 	struct qmi_device  *qmid;
 
@@ -1973,6 +1974,17 @@ static int gemalto_enable_app(struct ofono_modem *modem)
 	return -EINPROGRESS;
 }
 
+static void mbim_device_closed(void *user_data);
+static void mbim_subscriptions_cb(struct mbim_message *message, void *user)
+{
+	struct ofono_modem *modem = user;
+	struct gemalto_data *md = ofono_modem_get_data(modem);
+	DBG();
+	if(write(md->mbimfd, "\x02\x00\x00\x00\x0c\x00\x00\x00\x05\x00\x00\x00", 12))
+		DBG();
+	mbim_device_closed(modem);
+}
+
 static void mbim_subscriptions(struct ofono_modem *modem, gboolean subscribe)
 {
 	struct gemalto_data *md = ofono_modem_get_data(modem);
@@ -2012,7 +2024,10 @@ static void mbim_subscriptions(struct ofono_modem *modem, gboolean subscribe)
 		/* unsubscribe all */
 		mbim_message_set_arguments(message, "av", 0);
 
-	mbim_device_send(md->mbimd, 0, message, NULL, NULL, NULL);
+	if(!subscribe && getenv("OFONO_GTO_OFF_WHEN_POWERSAVE"))
+		mbim_device_send(md->mbimd, 0, message, mbim_subscriptions_cb, modem, NULL);
+	else
+		mbim_device_send(md->mbimd, 0, message, NULL, NULL, NULL);
 }
 
 
@@ -2174,6 +2189,7 @@ static int mbim_enable(struct ofono_modem *modem)
 	new.closing_wait = ASYNC_CLOSING_WAIT_NONE;
 	ioctl(fd, TIOCSSERIAL, &new);
 	ioctl(fd, TIOCMBIS, &DTR_flag);
+	md->mbimfd = fd;
 
 	DBG("device: %s opened successfully", device);
 	md->mbimd = mbim_device_new(fd, md->max_segment);
