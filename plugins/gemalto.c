@@ -2922,7 +2922,9 @@ static int gemalto_disable(struct ofono_modem *modem)
 	if (data->app == NULL)
 		return 0;
 
-	// FIXME AT channel must be active for below to work
+	if(data->powersave && getenv("OFONO_GTO_OFF_WHEN_POWERSAVE"))
+		return 0;
+
 	gemalto_exec_stored_cmd(modem, "disable");
 	gemalto_set_cfun(data->app, 41, modem);
 
