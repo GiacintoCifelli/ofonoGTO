@@ -2905,6 +2905,9 @@ static int gemalto_disable(struct ofono_modem *modem)
 		gemalto_command_passthrough_disable(modem);
 	}
 
+	if(data->powersave && getenv("OFONO_GTO_OFF_WHEN_POWERSAVE"))
+		return 0;
+
 	if (data->mbim == STATE_PRESENT) {
 		message = mbim_message_new(mbim_uuid_basic_connect,
 						MBIM_CID_RADIO_STATE,
@@ -2920,9 +2923,6 @@ static int gemalto_disable(struct ofono_modem *modem)
 	}
 
 	if (data->app == NULL)
-		return 0;
-
-	if(data->powersave && getenv("OFONO_GTO_OFF_WHEN_POWERSAVE"))
 		return 0;
 
 	gemalto_exec_stored_cmd(modem, "disable");
