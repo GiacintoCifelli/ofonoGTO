@@ -96,6 +96,7 @@ struct ofono_devinfo {
 	char *manufacturer;
 	char *model;
 	char *revision;
+	char *information;
 	char *serial;
 	char *svn;
 	unsigned int dun_watch;
@@ -835,6 +836,11 @@ void __ofono_modem_append_properties(struct ofono_modem *modem,
 						DBUS_TYPE_STRING,
 						&info->revision);
 
+		if (info->information)
+			ofono_dbus_dict_append(dict, "Information",
+						DBUS_TYPE_STRING,
+						&info->information);
+
 		if (info->serial)
 			ofono_dbus_dict_append(dict, "Serial",
 						DBUS_TYPE_STRING,
@@ -1430,6 +1436,37 @@ static void query_serial(struct ofono_devinfo *info)
 	info->driver->query_serial(info, query_serial_cb, info);
 }
 
+static void query_information_cb(const struct ofono_error *error,
+				const char *information, void *user)
+{
+	struct ofono_devinfo *info = user;
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = __ofono_atom_get_path(info->atom);
+
+	if (error->type != OFONO_ERROR_TYPE_NO_ERROR)
+		goto out;
+
+	info->information = (char*)information;
+
+	ofono_dbus_signal_property_changed(conn, path,
+						OFONO_MODEM_INTERFACE,
+						"Information", DBUS_TYPE_STRING,
+						&info->information);
+
+out:
+	query_serial(info);
+}
+
+static void query_information(struct ofono_devinfo *info)
+{
+	if (info->driver->query_information == NULL) {
+		query_serial(info);
+		return;
+	}
+
+	info->driver->query_information(info, query_information_cb, info);
+}
+
 static void query_revision_cb(const struct ofono_error *error,
 				const char *revision, void *user)
 {
@@ -1448,7 +1485,7 @@ static void query_revision_cb(const struct ofono_error *error,
 						&info->revision);
 
 out:
-	query_serial(info);
+	query_information(info);
 }
 
 static void query_revision(struct ofono_devinfo *info)
@@ -1677,6 +1714,9 @@ static void devinfo_unregister(struct ofono_atom *atom)
 
 	g_free(info->revision);
 	info->revision = NULL;
+
+	g_free(info->information);
+	info->information = NULL;
 
 	g_free(info->serial);
 	info->serial = NULL;
