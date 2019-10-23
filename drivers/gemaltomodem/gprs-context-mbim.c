@@ -298,7 +298,7 @@ done:
 	interface = ofono_modem_get_string(modem, "NetworkInterface");
 	DBG();
 	ofono_gprs_context_set_interface(gc, interface);
-	DBG("%p(%p)", gcd->cb, gcd->cb_data);
+	DBG("%p - %p(%p)", gcd, gcd?gcd->cb:NULL, gcd?gcd->cb_data:NULL);
 
 	CALLBACK_WITH_SUCCESS(gcd->cb, gcd->cb_data);
 	DBG();
