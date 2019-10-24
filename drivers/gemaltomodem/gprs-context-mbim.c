@@ -441,6 +441,8 @@ static void mbim_connect_notify(struct mbim_message *message, void *user)
 	uint8_t context_type[16];
 	uint32_t nw_error;
 	char uuidstr[37];
+	struct ofono_gprs_context *gc = user;
+	struct gprs_context_data *gcd = ofono_gprs_context_get_data(gc);
 
 	DBG("");
 
@@ -454,6 +456,12 @@ static void mbim_connect_notify(struct mbim_message *message, void *user)
 			session_id, activation_state, ip_type);
 	l_uuid_to_string(context_type, uuidstr, sizeof(uuidstr));
 	DBG("context_type: %s, nw_error: %u", uuidstr, nw_error);
+
+	if(activation_state!=3) // context deactivated
+		return;
+	ofono_gprs_context_deactivated(gc, gcd->active_context);
+	gcd->active_context = 0;
+	gcd->state = STATE_IDLE;
 }
 
 static int gemalto_gprs_context_probe(struct ofono_gprs_context *gc,
