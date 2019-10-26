@@ -785,6 +785,7 @@ static void gprs_initialized(struct ofono_gprs *gprs)
 
 	switch (gd->vendor) {
 	case OFONO_VENDOR_GEMALTO:
+	case OFONO_VENDOR_ZTE_VANILLA:
 		break;
 	default:
 		g_at_chat_send(gd->chat, "AT+CGAUTO=0", none_prefix, NULL, NULL,
@@ -818,12 +819,9 @@ static void gprs_initialized(struct ofono_gprs *gprs)
 	}
 
 	g_at_chat_register(gd->chat, "+CGEV:", cgev_notify, FALSE, gprs, NULL);
-	g_at_chat_register(gd->chat, "+CGREG:", cgreg_notify, FALSE, gprs,
-									NULL);
-	g_at_chat_register(gd->chat, "+CEREG:", cereg_notify, FALSE, gprs,
-									NULL);
-	g_at_chat_register(gd->chat, "+C5GREG:", c5greg_notify, FALSE, gprs,
-									NULL);
+	g_at_chat_register(gd->chat, "+CGREG:", cgreg_notify, FALSE, gprs, NULL);
+	g_at_chat_register(gd->chat, "+CEREG:", cereg_notify, FALSE, gprs, NULL);
+	g_at_chat_register(gd->chat, "+C5GREG:", c5greg_notify, FALSE, gprs, NULL);
 
 	switch (gd->vendor) {
 	case OFONO_VENDOR_HUAWEI:
@@ -1039,13 +1037,10 @@ error:
 	ofono_gprs_remove(gprs);
 }
 
-static int at_gprs_probe(struct ofono_gprs *gprs,
-					unsigned int vendor, void *data)
+static int at_gprs_probe(struct ofono_gprs *gprs, unsigned int vendor, void *data)
 {
 	GAtChat *chat = data;
 	struct gprs_data *gd;
-	int autoattach;
-	struct ofono_modem* modem=ofono_gprs_get_modem(gprs);
 
 	gd = g_try_new0(struct gprs_data, 1);
 	if (gd == NULL)
@@ -1056,12 +1051,9 @@ static int at_gprs_probe(struct ofono_gprs *gprs,
 
 	ofono_gprs_set_data(gprs, gd);
 
-	if (gd->vendor == OFONO_VENDOR_GEMALTO) {
-		autoattach=ofono_modem_get_integer(modem, "GemaltoAutoAttach");
-		/* set autoattach */
-		gd->auto_attach = (autoattach == 1);
-		/* skip the cgdcont scanning: set manually */
-		test_and_set_regstatus(gprs);
+	if(gd->vendor == OFONO_VENDOR_GEMALTO || gd->vendor == OFONO_VENDOR_ZTE_VANILLA) {
+		gd->auto_attach = 1; /* ofono_modem_get_integer(ofono_gprs_get_modem(gprs), "GemaltoAutoAttach") == 1; // RFU check */
+		test_and_set_regstatus(gprs); /* skip the cgdcont scanning: set manually */
 	} else {
 		g_at_chat_send(gd->chat, "AT+CGDCONT=?", cgdcont_prefix,
 						at_cgdcont_test_cb, gprs, NULL);
