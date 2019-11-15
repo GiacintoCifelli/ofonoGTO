@@ -354,6 +354,7 @@ static int cops_cb(gboolean ok, GAtResult *result)
 	if (!g_at_result_iter_next_number(&iter, &tech))
 		tech = -1; /* make sure it has not been set to something */
 error:
+	DBG("current tech: %d", tech);
 	return tech;
 }
 
@@ -364,6 +365,7 @@ static void netreg_notify_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	int cops_tech = cops_cb(ok, result);
 
 	if (cops_tech == -1) { /* take the indicator status */
+		DBG();
 		ofono_gprs_status_notify(nri->gprs, nri->status);
 		return;
 	}
@@ -413,8 +415,7 @@ static void netreg_notify(struct ofono_gprs *gprs, const char* ind, int status,
 	nri->ind = ind;
 	nri->status = status;
 	nri->bearer = bearer;
-	g_at_chat_send(gd->chat, "AT+COPS?", none_prefix, netreg_notify_cb,
-		nri, g_free);
+	g_at_chat_send(gd->chat, "AT+COPS?", none_prefix, netreg_notify_cb, nri, g_free);
 }
 
 static void cgreg_notify(GAtResult *result, gpointer user_data)
