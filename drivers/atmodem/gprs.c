@@ -47,6 +47,7 @@ static const char *cgreg_prefix[] = { "+CGREG:", NULL };
 static const char *cereg_prefix[] = { "+CEREG:", NULL };
 static const char *c5greg_prefix[] = { "+C5GREG:", NULL };
 static const char *cgdcont_prefix[] = { "+CGDCONT:", NULL };
+static const char *cops_prefix[] = { "+COPS:", NULL };
 static const char *none_prefix[] = { NULL };
 
 struct gprs_data {
@@ -385,8 +386,7 @@ static void netreg_notify_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	/* all other cases ignored: indicator not for current AcT */
 }
 
-static void netreg_notify(struct ofono_gprs *gprs, const char* ind, int status,
-								int bearer)
+static void netreg_notify(struct ofono_gprs *gprs, const char* ind, int status, int bearer)
 {
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
 	struct netreg_info *nri;
@@ -415,7 +415,7 @@ static void netreg_notify(struct ofono_gprs *gprs, const char* ind, int status,
 	nri->ind = ind;
 	nri->status = status;
 	nri->bearer = bearer;
-	g_at_chat_send(gd->chat, "AT+COPS?", none_prefix, netreg_notify_cb, nri, g_free);
+	g_at_chat_send(gd->chat, "AT+COPS?", cops_prefix, netreg_notify_cb, nri, g_free);
 }
 
 static void cgreg_notify(GAtResult *result, gpointer user_data)
