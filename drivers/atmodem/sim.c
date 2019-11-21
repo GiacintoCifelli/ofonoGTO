@@ -76,6 +76,7 @@ static const char *cuad_prefix[] = { "+CUAD:", NULL };
 static const char *ccho_prefix[] = { "+CCHO:", NULL };
 static const char *crla_prefix[] = { "+CRLA:", NULL };
 static const char *cgla_prefix[] = { "+CGLA:", NULL };
+static const char *cimi_prefix[] = { "+CIMI:", NULL };
 static const char *none_prefix[] = { NULL };
 
 static void append_file_path(char *buf, const unsigned char *path,
@@ -454,18 +455,45 @@ static void at_cimi_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	cb(&error, imsi, cbd->data);
 }
 
+/*answer format: +CIMI: 262953430002272 */
+static void at_ztev_cimi_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	GAtResultIter iter;
+	ofono_sim_imsi_cb_t cb = cbd->cb;
+	struct ofono_error error;
+	const char *imsi;
+	decode_at_error(&error, g_at_result_final_response(result));
+	if (!ok) {
+		cb(&error, NULL, cbd->data);
+		return;
+	}
+	g_at_result_iter_init(&iter, result);
+	if (!g_at_result_iter_next(&iter, "+CIMI:")) {
+		cb(&error, NULL, cbd->data);
+		return;
+	}
+	g_at_result_iter_next_unquoted_string(&iter, &imsi);
+	DBG("ztev_cimi_cb: %s", imsi);
+	cb(&error, imsi, cbd->data);
+}
+
 static void at_read_imsi(struct ofono_sim *sim, ofono_sim_imsi_cb_t cb,
 				void *data)
 {
 	struct sim_data *sd = ofono_sim_get_data(sim);
 	struct cb_data *cbd = cb_data_new(cb, data);
 
-	if (g_at_chat_send(sd->chat, "AT+CIMI", NULL,
-				at_cimi_cb, cbd, g_free) > 0)
-		return;
+	if(sd->vendor==OFONO_VENDOR_ZTE_VANILLA) {
+		if (g_at_chat_send(sd->chat, "AT+CIMI", cimi_prefix, at_ztev_cimi_cb, cbd, g_free) > 0)
+			return;
+	}
+	else {
+		if (g_at_chat_send(sd->chat, "AT+CIMI", NULL, at_cimi_cb, cbd, g_free) > 0)
+			return;
+	}
 
 	g_free(cbd);
-
 	CALLBACK_WITH_FAILURE(cb, NULL, data);
 }
 
