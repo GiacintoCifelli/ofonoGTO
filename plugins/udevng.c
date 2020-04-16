@@ -1155,10 +1155,23 @@ static gboolean setup_gemalto(struct modem_info* modem)
 			info->devnode, info->subsystem, info->interface,
 			info->number, info->sysattr);
 
+		/* note: option devices order in VMs under windows may vary */
 		if (g_str_equal(info->subsystem,"tty")) {
 			/* option devices (ttyUSBx) */
-			/* note: option devices order in VMs under windows may vary */
-			if (g_str_equal(info->interface, "255/255/255") ||
+			if ((m == 0x6b || m == 0x68 || m == 0x90b2) &&
+			    (g_str_equal(info->interface, "255/255/255") ||
+			     g_str_equal(info->interface, "255/254/255"))) {
+				if (g_str_equal(info->number, "00"))	{
+					diag = info->devnode;
+				} else if (g_str_equal(info->number, "01")) {
+					app = info->devnode;
+				} else if (g_str_equal(info->number, "02")) {
+					gnss = rsa = info->devnode;
+				} else if (g_str_equal(info->number, "03")) {
+					mdm = info->devnode;
+				}
+			/* other option devices with different mapping (ttyUSBx) */
+			} else if (g_str_equal(info->interface, "255/255/255") ||
 					g_str_equal(info->interface, "255/66/1") ||
 					g_str_equal(info->interface, "255/0/0")) {
 				if (g_str_equal(info->number, "00"))	{
@@ -1238,7 +1251,7 @@ static gboolean setup_gemalto(struct modem_info* modem)
 		ofono_modem_set_driver(modem->modem, "mbim");
 		return TRUE;
 	}
-
+	DBG("APP: %s, mdm: %s, qmictl: %s, net: %s\n", app, mdm, ctl, net);
 	ofono_modem_set_string(modem->modem, "Modem", mdm);
 	ofono_modem_set_string(modem->modem, "Application", app);
 	ofono_modem_set_string(modem->modem, "GNSS", gnss);

@@ -3,7 +3,7 @@
  *  oFono - Open Source Telephony
  *
  *  Copyright (C) 2017 Vincent Cesson. All rights reserved.
- *  Copyright (C) 2018 Gemalto M2M
+ *  Copyright (C) 2020 Gemalto M2M
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -2280,7 +2280,7 @@ static void set_from_model(struct gemalto_data *data) {
 		 * note: we probe for ECM/NCM even if the port is not present
 		 * (for serial connection type or serial-like)
 		 */
-		if (m == 0x53 || m == 0x60 || m == 0x63)
+		if (m == 0x53 || m == 0x60 || m == 0x63 || m == 0x6b || m == 0x68 || m == 0x90b2)
 			data->qmi = STATE_PROBE;
 		/*these families have PPP only*/
 		else if (m != 0x58 && m != 0x47 && m != 0x54)
