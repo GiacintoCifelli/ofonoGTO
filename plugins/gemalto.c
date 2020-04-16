@@ -2068,6 +2068,7 @@ static void mbim_device_caps_info_cb(struct mbim_message *message, void *user)
 	DBG("DeviceId: %s", device_id);
 	DBG("FirmwareInfo: %s", firmware_info);
 	DBG("HardwareInfo: %s", hardware_info);
+	DBG("Max sessions: %u", max_sessions);
 
 	ofono_modem_set_string(modem, "DeviceId", device_id);
 	ofono_modem_set_string(modem, "FirmwareInfo", firmware_info);
@@ -2720,6 +2721,7 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 		gprs = ofono_gprs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem",
 								data->app);
 		ofono_gprs_set_cid_range(gprs, 0, data->max_sessions);
+		DBG("CID range: 0, %u", data->max_sessions);
 		if (data->model == 0x65) {
 			struct gemalto_mbim_composite comp;
 			comp.device = data->mbimd;
