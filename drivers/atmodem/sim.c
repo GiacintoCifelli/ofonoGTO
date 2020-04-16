@@ -487,8 +487,7 @@ static void at_read_imsi(struct ofono_sim *sim, ofono_sim_imsi_cb_t cb,
 	if(sd->vendor==OFONO_VENDOR_ZTE_VANILLA) {
 		if (g_at_chat_send(sd->chat, "AT+CIMI", cimi_prefix, at_ztev_cimi_cb, cbd, g_free) > 0)
 			return;
-	}
-	else {
+	} else {
 		if (g_at_chat_send(sd->chat, "AT+CIMI", NULL, at_cimi_cb, cbd, g_free) > 0)
 			return;
 	}
