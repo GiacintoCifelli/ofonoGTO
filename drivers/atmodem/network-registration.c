@@ -678,6 +678,36 @@ static void csq_notify(GAtResult *result, gpointer user_data)
 	}
 }
 
+static inline int zte_vanilla_convert_signal_strength(int strength)
+{
+	int result;
+
+	if (strength == 99)
+		result = -1;
+	else
+		result = (strength * 100) / 91;
+
+	return result;
+}
+
+static void csq3_notify(GAtResult *result, gpointer user_data)
+{
+	struct ofono_netreg *netreg = user_data;
+	int strength;
+	GAtResultIter iter;
+
+	g_at_result_iter_init(&iter, result);
+
+	if (!g_at_result_iter_next(&iter, "+CSQ:"))
+		return;
+
+	if (!g_at_result_iter_next_number(&iter, &strength))
+		return;
+
+	if(strength>99)
+		ofono_netreg_strength_notify(netreg, zte_vanilla_convert_signal_strength(strength-100));
+}
+
 static void cesq_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_netreg *netreg = user_data;
@@ -2148,8 +2178,7 @@ static void at_creg_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		nd->signal_min = 0;
 		nd->signal_max = 5;
 		nd->signal_invalid = 99;
-		g_at_chat_register(nd->chat, "+CSQ:", csq_notify, FALSE, netreg, NULL); /* Register for +CSQ */
-		g_at_chat_register(nd->chat, "+CESQ:", cesq_notify, FALSE, netreg, NULL); /* Register for +CESQ */
+		g_at_chat_register(nd->chat, "+CSQ:", csq3_notify, FALSE, netreg, NULL); /* Register for +CSQ */
 		manage_csq_source(netreg, TRUE); /* start periodic polling of CSQ/CESQ */
 		break;
 	case OFONO_VENDOR_NOKIA:

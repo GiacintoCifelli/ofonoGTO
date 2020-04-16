@@ -2,7 +2,7 @@
  *
  *  oFono - Open Source Telephony
  *
- *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2019 Gemalto M2M
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -24,13 +24,16 @@
 #endif
 
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include <glib.h>
 #include <gatchat.h>
 #include <gattty.h>
-
+#include <gdbus.h>
+#include "ofono.h"
 #define OFONO_API_SUBJECT_TO_CHANGE
+#include <ofono/dbus.h>
 #include <ofono/plugin.h>
 #include <ofono/modem.h>
 #include <ofono/devinfo.h>
@@ -169,6 +172,228 @@ static void sim_state_cb(gboolean present, gpointer user_data)
 	g_at_chat_send(data->aux, "AT+CFUN=4", none_prefix, cfun_enable, modem, NULL);
 }
 
+/*******************************************************************************
+ * Command passthrough interface
+ * keeping the gemalto name for ease of filtering in dbus rules
+ ******************************************************************************/
+
+#define COMMAND_PASSTHROUGH_INTERFACE OFONO_SERVICE ".gemalto.CommandPassthrough"
+
+static int command_passthrough_signal_answer(const char *answer, gpointer user_data)
+{
+	struct ofono_modem *modem = user_data;
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
+	DBusMessage *signal;
+	DBusMessageIter iter;
+
+	if (!conn || !path)
+		return -1;
+
+	signal = dbus_message_new_signal(path, COMMAND_PASSTHROUGH_INTERFACE,
+								"Answer");
+	if (!signal) {
+		ofono_error("Unable to allocate new %s.PropertyChanged signal",
+						COMMAND_PASSTHROUGH_INTERFACE);
+		return -1;
+	}
+
+	dbus_message_iter_init_append(signal, &iter);
+
+	dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &answer);
+
+	DBG("");
+
+	return g_dbus_send_message(conn, signal);
+}
+
+static void command_passthrough_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	GAtResultIter iter;
+	guint len = 0;
+	char *answer;
+
+	g_at_result_iter_init(&iter, result);
+
+	while (g_at_result_iter_next(&iter, NULL)) {
+		len += strlen(g_at_result_iter_raw_line(&iter))+2;
+	}
+
+	len += strlen(g_at_result_final_response(result))+3;
+	answer = g_new0(char, len);
+	g_at_result_iter_init(&iter, result);
+
+	while (g_at_result_iter_next(&iter, NULL)) {
+		sprintf(answer+strlen(answer),"%s\r\n",
+					g_at_result_iter_raw_line(&iter));
+	}
+
+	sprintf(answer+strlen(answer),"%s\r\n",
+					g_at_result_final_response(result));
+
+	DBG("answer_len: %u, answer_string: %s", len, answer);
+	command_passthrough_signal_answer(answer, user_data);
+
+	g_free(answer);
+}
+
+static DBusMessage *command_passthrough_simple(DBusConnection *conn, DBusMessage *msg, void *user_data)
+{
+	struct ofono_modem *modem = user_data;
+	struct zte_data *data = ofono_modem_get_data(modem);
+
+	DBusMessageIter iter;
+	const char *command;
+
+	if (!dbus_message_iter_init(msg, &iter))
+		return g_dbus_create_error(msg, DBUS_ERROR_INVALID_ARGS,
+							"No arguments given");
+
+	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
+		return g_dbus_create_error(msg, DBUS_ERROR_INVALID_ARGS,
+					"Invalid argument type: '%c'",
+					dbus_message_iter_get_arg_type(&iter));
+
+	dbus_message_iter_get_basic(&iter, &command);
+
+	g_at_chat_send(data->aux, command, NULL, command_passthrough_cb,
+								modem, NULL);
+
+	return dbus_message_new_method_return(msg);
+}
+
+static void executeWithPrompt(GAtChat *port, const char *command,
+			const char *prompt, const char *argument, void *cb,
+			void *cbd, void *freecall)
+{
+	char *buf;
+	const char *expected_array[2] = {0,0};
+
+	buf = g_strdup_printf("%s\r%s", command, argument);
+
+	if (strlen(argument)>=2 && g_str_equal(argument+strlen(argument)-2,
+									"^Z"))
+		sprintf(buf+strlen(buf)-2,"\x1a");
+
+	if (strlen(argument)>=2 && g_str_equal(argument+strlen(argument)-2,
+									"\\r"))
+		sprintf(buf+strlen(buf)-2,"\r");
+
+	expected_array[0]=prompt;
+	g_at_chat_send_and_expect_short_prompt(port, buf, expected_array,
+							cb, cbd, freecall);
+	free(buf);
+}
+
+static DBusMessage *command_passthrough_with_prompt(DBusConnection *conn, DBusMessage *msg, void *user_data)
+{
+	struct ofono_modem *modem = user_data;
+	struct zte_data *data = ofono_modem_get_data(modem);
+	DBusMessageIter iter;
+	const char *command, *prompt, *argument;
+
+	if (!dbus_message_iter_init(msg, &iter))
+		return g_dbus_create_error(msg, DBUS_ERROR_INVALID_ARGS,
+							"No arguments given");
+
+	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
+		return g_dbus_create_error(msg, DBUS_ERROR_INVALID_ARGS,
+					"Invalid argument type: '%c'",
+					dbus_message_iter_get_arg_type(&iter));
+
+	dbus_message_iter_get_basic(&iter, &command);
+	dbus_message_iter_next(&iter);
+
+	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
+		return g_dbus_create_error(msg, DBUS_ERROR_INVALID_ARGS,
+					"Invalid argument type: '%c'",
+					dbus_message_iter_get_arg_type(&iter));
+
+	dbus_message_iter_get_basic(&iter, &prompt);
+	dbus_message_iter_next(&iter);
+
+	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
+		return g_dbus_create_error(msg, DBUS_ERROR_INVALID_ARGS,
+					"Invalid argument type: '%c'",
+					dbus_message_iter_get_arg_type(&iter));
+
+	dbus_message_iter_get_basic(&iter, &argument);
+
+	executeWithPrompt(data->aux, command, prompt, argument,
+					command_passthrough_cb, modem, NULL);
+
+	return dbus_message_new_method_return(msg);
+}
+
+static DBusMessage *command_passthrough_send_break(DBusConnection *conn, DBusMessage *msg, void *user_data)
+{
+	struct ofono_modem *modem = user_data;
+	struct zte_data *data = ofono_modem_get_data(modem);
+	GIOChannel *channel = g_at_chat_get_channel(data->aux);
+
+	g_io_channel_write_chars(channel, "\r", 1, NULL, NULL);
+
+	return dbus_message_new_method_return(msg);
+}
+
+static const GDBusMethodTable command_passthrough_methods[] = {
+	{ GDBUS_ASYNC_METHOD("Simple",
+		GDBUS_ARGS({ "command", "s" }),
+		NULL,
+		command_passthrough_simple) },
+	{ GDBUS_ASYNC_METHOD("WithPrompt",
+		GDBUS_ARGS({ "command", "s" }, { "prompt", "s" },
+							{ "argument", "s" }),
+		NULL,
+		command_passthrough_with_prompt) },
+	{ GDBUS_ASYNC_METHOD("SendBreak",
+		NULL,
+		NULL,
+		command_passthrough_send_break) },
+	{}
+};
+
+static const GDBusSignalTable command_passthrough_signals[] = {
+	{ GDBUS_SIGNAL("Answer",
+		GDBUS_ARGS({ "answer", "s" })) },
+	{ }
+};
+
+static void gemalto_command_passthrough_enable(struct ofono_modem *modem)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
+
+	/* Create Command Passthrough DBus interface */
+	if (!g_dbus_register_interface(conn, path, COMMAND_PASSTHROUGH_INTERFACE,
+					command_passthrough_methods,
+					command_passthrough_signals,
+					NULL,
+					modem,
+					NULL)) {
+		ofono_error("Could not register %s interface under %s",
+					COMMAND_PASSTHROUGH_INTERFACE, path);
+		return;
+	}
+
+	ofono_modem_add_interface(modem, COMMAND_PASSTHROUGH_INTERFACE);
+}
+
+static void gemalto_command_passthrough_disable(struct ofono_modem *modem)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
+
+	/* Create Command Passthrough DBus interface */
+	if (!g_dbus_unregister_interface(conn, path, COMMAND_PASSTHROUGH_INTERFACE)) {
+		ofono_error("Could not register %s interface under %s",
+			COMMAND_PASSTHROUGH_INTERFACE, path);
+		return;
+	}
+
+	ofono_modem_remove_interface(modem, COMMAND_PASSTHROUGH_INTERFACE);
+}
+
 static int zte_enable(struct ofono_modem *modem)
 {
 	struct zte_data *data = ofono_modem_get_data(modem);
@@ -180,7 +405,10 @@ static int zte_enable(struct ofono_modem *modem)
 	g_at_chat_send(data->aux, "ATE0", NULL, NULL, NULL, NULL);
 	g_at_chat_send(data->aux, "AT+CMEE=1", NULL, NULL, NULL, NULL);
 	g_at_chat_send(data->aux, "AT+CSCS=\"GSM\"", none_prefix, NULL, NULL, NULL);
+	g_at_chat_send(data->aux, "AT+CGAUTO=1", none_prefix, NULL, NULL, NULL);
+
 	data->sim_state_query = at_util_sim_state_query_new(data->aux, 2, 20, sim_state_cb, modem, NULL);
+	gemalto_command_passthrough_enable(modem);
 	return -EINPROGRESS;
 }
 
@@ -215,6 +443,7 @@ static int zte_disable(struct ofono_modem *modem)
 
 	DBG("%p", modem);
 
+	gemalto_command_passthrough_disable(modem);
 	g_at_chat_cancel_all(data->aux);
 	g_at_chat_unregister_all(data->aux);
 
@@ -273,8 +502,7 @@ static void zte_post_sim(struct ofono_modem *modem)
 	DBG("%p", modem);
 	ofono_phonebook_create(modem, 0, "atmodem", data->aux);
 	ofono_sms_create(modem, 0, "atmodem", data->aux);
-	//ofono_lte_create(modem, 0, "ztevmodem", data->app); // to be created
-	ofono_lte_create(modem, 0, "atmodem", data->aux); // to be replaced by previous line
+	ofono_lte_create(modem, 0, "ztevanillamodem", data->aux);
 }
 
 static void zte_post_online(struct ofono_modem *modem) // untested
@@ -283,15 +511,11 @@ static void zte_post_online(struct ofono_modem *modem) // untested
 	struct ofono_gprs *gprs;
 	struct ofono_gprs_context *gc;
 	DBG("%p", modem);
-	ofono_netreg_create(modem, 0 /*OFONO_VENDOR_ZTE*/, "atmodem", data->aux);
-	ofono_cbs_create(modem, OFONO_VENDOR_QUALCOMM_MSM, "atmodem", data->aux);
-	ofono_ussd_create(modem, OFONO_VENDOR_QUALCOMM_MSM, "atmodem", data->aux);
+	ofono_netreg_create(modem, OFONO_VENDOR_ZTE_VANILLA, "atmodem", data->aux);
 
 	gprs = ofono_gprs_create(modem, OFONO_VENDOR_ZTE_VANILLA, "atmodem", data->aux);
-	// to be recraft with the cdc_ether port
-	//gc = ofono_gprs_context_create(modem, OFONO_VENDOR_ZTE_VANILLA, "atmodem", data->modem); // use ZCACT
-	//gc = ofono_gprs_context_create(modem, 0, "ztevmodem", data->modem); // alternative possibility use ZCACT
-	gc = NULL;
+	ofono_gprs_set_cid_range(gprs, 1, 1);
+	gc = ofono_gprs_context_create(modem, 0, "ztevanilla", data->aux);
 
 	if (gprs && gc)
 		ofono_gprs_add_context(gprs, gc);

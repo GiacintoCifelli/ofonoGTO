@@ -487,6 +487,13 @@ builtin_sources += drivers/atmodem/atutil.h \
 			drivers/gemaltomodem/gprs-context-swwan.c \
 			drivers/gemaltomodem/gprs-context-mbim.c
 
+builtin_modules += ztevanillamodem
+builtin_sources += drivers/atmodem/atutil.h \
+			drivers/ztevanillamodem/ztevanillamodem.h \
+			drivers/ztevanillamodem/ztevanillamodem.c \
+			drivers/ztevanillamodem/lte.c \
+			drivers/ztevanillamodem/gprs-context.c
+
 builtin_modules += xmm7modem
 builtin_sources += drivers/atmodem/atutil.h \
 			drivers/xmm7modem/xmm7modem.h \
