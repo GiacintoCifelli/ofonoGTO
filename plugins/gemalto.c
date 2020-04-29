@@ -2292,8 +2292,12 @@ static void set_from_model(struct gemalto_data *data) {
 		data->gprs_opt = USE_CTX3;
 		data->ecmncm = STATE_ABSENT;
 	}
-	if (m == 0x63 || m == 0x65 || m == 0x5b || m == 0x5c || m == 0x5d)
+	if (m == 0x63 || m == 0x65 || m == 0x5b || m == 0x5c || m == 0x5d || m == 0x6b)
 		data->gina = STATE_PRESENT;
+
+	if (m == 0x6b) {
+		data->ecmncm = STATE_PROBE;
+	}
 
 	data->init_waiting_time = 30;
 
