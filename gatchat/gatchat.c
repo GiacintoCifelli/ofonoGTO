@@ -928,6 +928,7 @@ static gboolean can_write_data(gpointer data)
 
 static void chat_wakeup_writer(struct at_chat *chat)
 {
+	usleep(1*1000);
 	g_at_io_set_write_handler(chat->io, can_write_data, chat);
 }
 
