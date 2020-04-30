@@ -2220,8 +2220,9 @@ other_devices:
 static void qmi_enable_cb(void *user_data)
 {
 	struct ofono_modem *modem = user_data;
-	struct gemalto_data *md = ofono_modem_get_data(modem);
-	md->qmi = STATE_PRESENT;
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	data->qmi = STATE_PRESENT;
+	qmi_device_set_expected_data_format(data->qmid, QMI_DEVICE_EXPECTED_DATA_FORMAT_RAW_IP);
 	gemalto_enable_app(modem); /* qmi done, continue with app interface */
 }
 

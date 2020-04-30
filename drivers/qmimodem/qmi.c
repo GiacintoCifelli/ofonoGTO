@@ -1628,6 +1628,7 @@ bool qmi_device_set_expected_data_format(struct qmi_device *device,
 	}
 
 	res = true;
+	DBG("set %s to '%c' successfully", sysfs_path, value);
 
 done:
 	if (fd >= 0)
