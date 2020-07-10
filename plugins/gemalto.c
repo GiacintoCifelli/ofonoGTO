@@ -2296,7 +2296,7 @@ static void set_from_model(struct gemalto_data *data) {
 	if (m == 0x63 || m == 0x65 || m == 0x5b || m == 0x5c || m == 0x5d || m == 0x6b)
 		data->gina = STATE_PRESENT;
 
-	if (m == 0x6b) {
+	if (m == 0x6b || m==0x68) {
 		data->ecmncm = STATE_PROBE;
 	}
 
