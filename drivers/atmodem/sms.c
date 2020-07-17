@@ -54,7 +54,10 @@ static const char *none_prefix[] = { NULL };
 static gboolean set_cmgf(gpointer user_data);
 static gboolean set_cpms(gpointer user_data);
 static void at_cmgl_set_cpms(struct ofono_sms *sms, int store);
+static gboolean at_cmgl_polling(gpointer data);
 
+static gboolean smsObjRemoved = TRUE;
+static guint timerID = 0;
 #define MAX_CMGF_RETRIES 10
 #define MAX_CPMS_RETRIES 10
 
@@ -708,11 +711,34 @@ err:
 static void at_cmgl_cb(gboolean ok, GAtResult *result, gpointer user_data)
 {
 	struct ofono_sms *sms = user_data;
+	struct sms_data *data = ofono_sms_get_data(sms);
 
 	if (!ok)
 		DBG("Initial listing SMS storage failed!");
 
+	if (data->vendor==OFONO_VENDOR_GEMALTO) {
+		timerID = g_timeout_add_seconds(60, at_cmgl_polling, sms);
+
+		DBG("Polling started %d", timerID);
+	}
+
 	at_cmgl_done(sms);
+}
+
+static gboolean at_cmgl_polling(gpointer data)
+{
+	struct ofono_sms *sms = data;
+	if (!smsObjRemoved) {
+		struct sms_data *data = ofono_sms_get_data(sms);
+		DBG("Send List Unread SMS request /n");
+
+		g_at_chat_send_pdu_listing(data->chat, "AT+CMGL=0", cmgl_prefix,
+					at_cmgl_notify, NULL, sms, NULL);
+		return TRUE;
+	} else {
+		return FALSE;
+	}
+
 }
 
 static void at_cmgl_cpms_cb(gboolean ok, GAtResult *result, gpointer user_data)
@@ -731,6 +757,8 @@ static void at_cmgl_cpms_cb(gboolean ok, GAtResult *result, gpointer user_data)
 
 	g_at_chat_send_pdu_listing(data->chat, "AT+CMGL=4", cmgl_prefix,
 					at_cmgl_notify, at_cmgl_cb, sms, NULL);
+    //Here we are sure that next AT+CMGL=0 polling can be passed with needed refrence objects
+    smsObjRemoved = FALSE;
 }
 
 static void at_cmgl_set_cpms(struct ofono_sms *sms, int store)
@@ -1327,6 +1355,14 @@ static int at_sms_probe(struct ofono_sms *sms, unsigned int vendor,
 static void at_sms_remove(struct ofono_sms *sms)
 {
 	struct sms_data *data = ofono_sms_get_data(sms);
+
+	smsObjRemoved = TRUE;
+
+	if (timerID > 0) {
+		g_source_remove(timerID);
+		timerID = 0;
+		DBG("SMS polling Timer Removed Succefully");
+	}
 
 	g_free(data->cnma_ack_pdu);
 
