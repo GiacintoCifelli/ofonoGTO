@@ -85,4 +85,6 @@ test/modem-demo
 test/modem-list
 udhcp.script-miami
 ofono.zip
+__ofono.indent.pro.txt
+gittools.txt
 
