@@ -1,0 +1,25 @@
+#!/usr/bin/python3
+
+import dbus
+import sys
+
+bus = dbus.SystemBus()
+
+if len(sys.argv) == 3:
+	path = sys.argv[1]
+	command = sys.argv[2]
+elif len(sys.argv) == 2:
+	manager = dbus.Interface(bus.get_object('org.ofono', '/'),
+					'org.ofono.Manager')
+	modems = manager.GetModems()
+	path = modems[0][0]
+	command = sys.argv[1]
+else:
+	print("%s [PATH] command" % (sys.argv[0]))
+	sys.exit(0)
+
+print("Send AT command for modem %s..." % path)
+gto_cpt = dbus.Interface(bus.get_object('org.ofono', path),
+				'org.ofono.gemalto.CommandPassthrough')
+
+gto_cpt.Simple(command)
