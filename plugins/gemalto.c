@@ -2281,7 +2281,7 @@ static void set_from_model(struct gemalto_data *data) {
 		 * note: we probe for ECM/NCM even if the port is not present
 		 * (for serial connection type or serial-like)
 		 */
-		if (m == 0x53 || m == 0x60 || m == 0x63 || m == 0x6b || m == 0x68 || m == 0x90b2)
+		if (m == 0x53 || m == 0x60 || m == 0x63 || m == 0x6b  || m == 0x6f || m == 0x68 || m == 0x69 || m == 0x90b2)
 			data->qmi = STATE_PROBE;
 		/*these families have PPP only*/
 		else if (m != 0x58 && m != 0x47 && m != 0x54)
@@ -2293,10 +2293,10 @@ static void set_from_model(struct gemalto_data *data) {
 		data->gprs_opt = USE_CTX3;
 		data->ecmncm = STATE_ABSENT;
 	}
-	if (m == 0x63 || m == 0x65 || m == 0x5b || m == 0x5c || m == 0x5d || m == 0x6b)
+	if (m == 0x63 || m == 0x65 || m == 0x5b || m == 0x5c || m == 0x5d || m == 0x6b  || m == 0x6f)
 		data->gina = STATE_PRESENT;
 
-	if (m == 0x6b || m==0x68) {
+	if (m == 0x6b  || m == 0x6f || m==0x68 || m==0x69) {
 		data->ecmncm = STATE_PROBE;
 	}
 
