@@ -1491,7 +1491,8 @@ static void impi_read_cb(int ok, int total_length, int record,
 		return;
 	}
 
-	sim->impi = g_strndup((const char *)data + 2, data[1]);
+	if (validate_utf8_tlv(data))
+		sim->impi = g_strndup((const char *)data + 2, data[1]);
 }
 
 static void discover_apps_cb(const struct ofono_error *error,
