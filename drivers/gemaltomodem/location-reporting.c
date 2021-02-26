@@ -92,13 +92,13 @@ static void gemalto_location_reporting_disable(
 static int enable_data_stream(struct ofono_location_reporting *lr)
 {
 	struct ofono_modem *modem;
-	const char *gps_dev;
+	const char *gnss_dev;
 	GHashTable *options;
 	GIOChannel *channel;
 	int fd;
 
 	modem = ofono_location_reporting_get_modem(lr);
-	gps_dev = ofono_modem_get_string(modem, "GPS");
+	gnss_dev = ofono_modem_get_string(modem, "GNSS");
 
 	options = g_hash_table_new(g_str_hash, g_str_equal);
 	if (options == NULL)
@@ -106,7 +106,7 @@ static int enable_data_stream(struct ofono_location_reporting *lr)
 
 	g_hash_table_insert(options, "Baud", "115200");
 
-	channel = g_at_tty_open(gps_dev, options);
+	channel = g_at_tty_open(gnss_dev, options);
 
 	g_hash_table_destroy(options);
 
