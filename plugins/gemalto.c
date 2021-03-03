@@ -3278,6 +3278,10 @@ static void gemalto_post_online(struct ofono_modem *modem)
 	 * in this version of ofono we must wait for SIM 'really-ready'
 	 * can be avoided when capturing the right URCs
 	 */
+
+	g_at_chat_send(data->mdm, "AT&C0", none_prefix, NULL, NULL, NULL);
+	g_at_chat_send(data->app, "AT&C0", none_prefix, NULL, NULL, NULL);
+
 	data->online_timer = g_timeout_add_seconds(5, gemalto_post_online_delayed, modem);
 }
 
