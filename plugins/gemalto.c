@@ -1768,7 +1768,7 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	gemalto_gnss_enable(modem);
 	gemalto_hardware_control_enable(modem);
 
-	g_at_chat_send(data->app, "AT^SCFG=\"GPRS/Autoattach\",\"Enable\"", none_prefix, NULL, NULL, NULL);
+	g_at_chat_send(data->app, "AT^SCFG=\"GPRS/Autoattach\",\"Enabled\"", none_prefix, NULL, NULL, NULL);
 
 	gemalto_set_cfun(data->app, 4, modem);
 	data->init_done = TRUE;
