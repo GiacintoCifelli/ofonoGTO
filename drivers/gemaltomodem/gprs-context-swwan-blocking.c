@@ -69,7 +69,7 @@ static void failed_setup(struct ofono_gprs_context *gc,
 		if (gcd->use_wwan)
 			sprintf(buf, "AT^SWWAN=0,%u", gcd->active_context);
 		else
-			sprintf(buf, "AT+CGACT=%u,0", gcd->active_context);
+			sprintf(buf, "AT+CGACT=0,%u", gcd->active_context);
 
 		g_at_chat_send(gcd->chat, buf, none_prefix, NULL, NULL, NULL);
 	}
@@ -151,7 +151,7 @@ static void gemalto_gprs_activate_primary(struct ofono_gprs_context *gc,
 	if (gcd->use_wwan)
 		sprintf(buf, "AT^SWWAN=1,%u", gcd->active_context);
 	else
-		sprintf(buf, "AT+CGACT=%u,1", gcd->active_context);
+		sprintf(buf, "AT+CGACT=1,%u", gcd->active_context);
 
 	if (g_at_chat_send(gcd->chat, buf, none_prefix,
 					activate_cb, gc, NULL) > 0){
@@ -207,7 +207,7 @@ static void gemalto_gprs_deactivate_primary(struct ofono_gprs_context *gc,
 	if (gcd->use_wwan)
 		sprintf(buf, "AT^SWWAN=0,%u", gcd->active_context);
 	else
-		sprintf(buf, "AT+CGACT=%u,0", gcd->active_context);
+		sprintf(buf, "AT+CGACT=0,%u", gcd->active_context);
 
 	if (g_at_chat_send(gcd->chat, buf, none_prefix,
 				deactivate_cb, gc, NULL) > 0)
