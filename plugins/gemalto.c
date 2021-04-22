@@ -123,6 +123,7 @@ static const char *sctm_prefix[] = { "^SCTM:", NULL };
 static const char *sbv_prefix[] = { "^SBV:", NULL };
 static const char *sqport_prefix[] = { "^SQPORT:", NULL };
 static const char *sgpsc_prefix[] = { "^SGPSC:", NULL };
+static const char *scfg_prefix[] = { "^SCFG:", NULL };
 
 typedef void (*OpenResultFunc)(gboolean success, struct ofono_modem *modem);
 
@@ -1733,8 +1734,7 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	g_at_chat_send(data->app, "ATE0", none_prefix, NULL, NULL, NULL);
 
 	if (data->gina != STATE_PRESENT)
-		g_at_chat_send(data->app, urcdest, none_prefix, NULL, NULL,
-									NULL);
+		g_at_chat_send(data->app, urcdest, scfg_prefix, NULL, NULL, NULL);
 
 	/* numeric error codes are interpreted by atmodem/atutil.c functions */
 	g_at_chat_send(data->app, "AT+CMEE=1", none_prefix, NULL, NULL, NULL);
