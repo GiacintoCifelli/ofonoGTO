@@ -1170,6 +1170,18 @@ static gboolean setup_gemalto(struct modem_info* modem)
 				} else if (g_str_equal(info->number, "03")) {
 					mdm = info->devnode;
 				}
+			} else 	if ((m==0x53) &&
+			    (g_str_equal(info->interface, "255/255/255") ||
+			     g_str_equal(info->interface, "255/254/255"))) {
+				if (g_str_equal(info->number, "00"))	{
+					diag = info->devnode;
+				} else if (g_str_equal(info->number, "01")) {
+					gnss = info->devnode;
+				} else if (g_str_equal(info->number, "02")) {
+					app = rsa = info->devnode;
+				} else if (g_str_equal(info->number, "03")) {
+					mdm = info->devnode;
+				}
 			/* other option devices with different mapping (ttyUSBx) */
 			} else if (g_str_equal(info->interface, "255/255/255") ||
 					g_str_equal(info->interface, "255/66/1") ||

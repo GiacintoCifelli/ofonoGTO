@@ -124,6 +124,7 @@ static const char *sbv_prefix[] = { "^SBV:", NULL };
 static const char *sqport_prefix[] = { "^SQPORT:", NULL };
 static const char *sgpsc_prefix[] = { "^SGPSC:", NULL };
 static const char *scfg_prefix[] = { "^SCFG:", NULL };
+static const char *sgauth_prefix[] = { "^SGAUTH:", NULL };
 
 typedef void (*OpenResultFunc)(gboolean success, struct ofono_modem *modem);
 
@@ -134,7 +135,10 @@ struct gemalto_data {
 	OpenResultFunc open_cb;
 	guint portfd;
 	GAtChat *app;
+	char appname[128];
 	GAtChat *mdm;
+	char mdmname[128];
+	char *tmpname;
 	int cfun;
 
 	struct ofono_sim *sim;
@@ -1729,7 +1733,9 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	 * frequent polling commands (e.g. if gemalto_csq_query is polled
 	 * every 5s then msec shall be more. In this case we put it to 6s)
 	 */
-	g_at_chat_set_wakeup_command(data->app, "AT\r", 1000, 6000);
+	g_at_chat_set_wakeup_command(data->app, "ATT\r", 1000, 6000);
+	if(data->app != data->mdm && data->mdm)
+		g_at_chat_set_wakeup_command(data->mdm, "ATT\r", 1000, 6000);
 
 	g_at_chat_send(data->app, "ATE0", none_prefix, NULL, NULL, NULL);
 
@@ -1750,11 +1756,11 @@ static void gemalto_initialize(struct ofono_modem *modem)
 								modem, NULL);
 	ofono_devinfo_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
 	g_at_chat_send(data->app,
-		"AT^SCFG=\"MEopMode/PwrSave\",\"enabled\",52,50", none_prefix,
+		"AT^SCFG=\"MEopMode/PwrSave\",\"enabled\",52,50", scfg_prefix,
 							NULL, NULL, NULL);
 
 	if (m != 0x5b && m != 0x5c && m != 0x5d && m != 0xa0) {
-		g_at_chat_send(data->app, "AT^SGAUTH?", NULL, sgauth_probe,
+		g_at_chat_send(data->app, "AT^SGAUTH?", sgauth_prefix, sgauth_probe,
 								modem, NULL);
 	}
 
@@ -1853,6 +1859,8 @@ static int gemalto_probe_device(void *user_data)
 	if(status<0)
 		goto failed;
 
+	usleep(10*1000);
+
 	status = read_fd(data->portfd, buf, buflen);
 	if(status<0)
 		goto failed;
@@ -1878,7 +1886,7 @@ static int gemalto_probe_device(void *user_data)
 		goto failed;
 	g_io_channel_unref(data->channel);
 	data->channel = NULL;
-	g_at_chat_set_debug(data->tmp_chat, gemalto_at_debug, "App: ");
+	g_at_chat_set_debug(data->tmp_chat, gemalto_at_debug, data->tmpname);
 	data->open_cb(TRUE, modem);
 	return FALSE; /* kill the timer: finished */
 
@@ -1965,13 +1973,18 @@ static void gemalto_enable_app_cb(gboolean success, struct ofono_modem *modem)
 
 	data->app = data->tmp_chat;
 	data->tmp_chat = NULL;
+	sprintf(data->mdmname, "Mdm %s: ", mdm);
+	data->tmpname = data->mdmname;
 	gemalto_open_device(mdm, gemalto_enable_mdm_cb, modem);
 }
 
 static int gemalto_enable_app(struct ofono_modem *modem)
 {
 	const char *app = gemalto_get_string(modem, "Application");
+	struct gemalto_data *data = ofono_modem_get_data(modem);
 
+	sprintf(data->appname, "App %s: ", app);
+	data->tmpname = data->appname;
 	gemalto_open_device(app, gemalto_enable_app_cb, modem);
 	return -EINPROGRESS;
 }
