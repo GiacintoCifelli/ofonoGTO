@@ -21,10 +21,10 @@ ell_headers = ell/util.h \
 			ell/strv.h \
 			ell/utf8.h \
 			ell/queue.h \
+			ell/timeout.h \
 			ell/main.h \
 			ell/idle.h \
 			ell/signal.h \
-			ell/timeout.h \
 			ell/io.h \
 			ell/log.h \
 			ell/checksum.h \
@@ -32,19 +32,22 @@ ell_headers = ell/util.h \
 			ell/uuid.h \
 			ell/file.h \
 			ell/uintset.h \
-			ell/string.h
+			ell/string.h \
+			ell/gpio.h \
+			ell/useful.h
 
 ell_sources = ell/private.h \
 			ell/missing.h \
+			ell/main-private.h \
 			ell/util.c \
 			ell/test.c \
 			ell/strv.c \
 			ell/utf8.c \
 			ell/queue.c \
+			ell/timeout.c \
 			ell/main.c \
 			ell/idle.c \
 			ell/signal.c \
-			ell/timeout.c \
 			ell/io.c \
 			ell/log.c \
 			ell/checksum.c \
@@ -52,7 +55,8 @@ ell_sources = ell/private.h \
 			ell/uuid.c \
 			ell/file.c \
 			ell/uintset.c \
-			ell/string.c
+			ell/string.c \
+			ell/gpio.c
 
 ell_libell_internal_la_SOURCES = $(ell_headers) $(ell_sources)
 endif

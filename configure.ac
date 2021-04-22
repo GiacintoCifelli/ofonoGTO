@@ -28,7 +28,7 @@ m4_define([_LT_AC_TAGCONFIG], [])
 m4_ifdef([AC_LIBTOOL_TAGS], [AC_LIBTOOL_TAGS([])])
 
 AC_DISABLE_STATIC
-AC_PROG_LIBTOOL
+LT_INIT
 
 AC_ARG_ENABLE(optimization, AC_HELP_STRING([--disable-optimization],
 			[disable code optimization through compiler]), [
@@ -54,6 +54,9 @@ AC_ARG_ENABLE(pie, AC_HELP_STRING([--enable-pie],
 	fi
 ])
 
+AC_CHECK_FUNCS(explicit_bzero)
+AC_CHECK_FUNCS(rawmemchr)
+
 AC_CHECK_FUNC(signalfd, dummy=yes,
 			AC_MSG_ERROR(signalfd support is required))
 
@@ -65,8 +68,8 @@ PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.32, dummy=yes,
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 
-PKG_CHECK_MODULES(DBUS, dbus-1 >= 1.4, dummy=yes,
-				AC_MSG_ERROR(D-Bus >= 1.4 is required))
+PKG_CHECK_MODULES(DBUS, dbus-1 >= 1.6, dummy=yes,
+				AC_MSG_ERROR(D-Bus >= 1.6 is required))
 AC_SUBST(DBUS_CFLAGS)
 AC_SUBST(DBUS_LIBS)
 

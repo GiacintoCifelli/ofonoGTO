@@ -1,0 +1,1 @@
+/home/gci/workspace/ofonoGTO/../ell/ell/useful.h
