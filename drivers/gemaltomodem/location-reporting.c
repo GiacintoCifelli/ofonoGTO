@@ -176,11 +176,8 @@ static void gemalto_location_reporting_support_cb(gboolean ok, GAtResult *result
 {
 	struct ofono_location_reporting *lr = user_data;
 
-	if (!ok) {
-		ofono_location_reporting_remove(lr);
-
-		return;
-	}
+ 	if (!ok)
+		ofono_error("SGPSC returned ERROR - ignoring");
 
 	ofono_location_reporting_register(lr);
 }
