@@ -1809,25 +1809,12 @@ static DBusMessage *gprs_set_property(DBusConnection *conn,
 	dbus_message_iter_recurse(&iter, &var);
 
 	if (!strcmp(property, "RoamingAllowed")) {
+		/* check only for keeping the logic straight */
 		if (dbus_message_iter_get_arg_type(&var) != DBUS_TYPE_BOOLEAN)
 			return __ofono_error_invalid_args(msg);
 
-		dbus_message_iter_get_basic(&var, &value);
-
-		if (gprs->roaming_allowed == (ofono_bool_t) value)
-			return dbus_message_new_method_return(msg);
-
-		gprs->roaming_allowed = value;
-
-		if (gprs->settings) {
-			g_key_file_set_integer(gprs->settings, SETTINGS_GROUP,
-						"RoamingAllowed",
-						gprs->roaming_allowed);
-			storage_sync(gprs->imsi, SETTINGS_STORE,
-					gprs->settings);
-		}
-
-		gprs_netreg_update(gprs);
+		/* just return, no value change */
+		return dbus_message_new_method_return(msg);
 	} else if (!strcmp(property, "Powered")) {
 		if (gprs->driver->set_attached == NULL)
 			return __ofono_error_not_implemented(msg);
@@ -3093,6 +3080,8 @@ struct ofono_gprs *ofono_gprs_create(struct ofono_modem *modem,
 	if (gprs == NULL)
 		return NULL;
 
+	gprs->roaming_allowed = TRUE;
+
 	gprs->atom = __ofono_modem_add_atom(modem, OFONO_ATOM_TYPE_GPRS,
 						gprs_remove, gprs);
 
@@ -3293,7 +3282,6 @@ static void gprs_load_settings(struct ofono_gprs *gprs, const char *imsi)
 	/*
 	 * If any error occurs, simply switch to defaults.
 	 * Default to Powered = True
-	 * and RoamingAllowed = False
 	 */
 	if (error) {
 		g_error_free(error);
@@ -3303,18 +3291,7 @@ static void gprs_load_settings(struct ofono_gprs *gprs, const char *imsi)
 	}
 
 	error = NULL;
-	gprs->roaming_allowed = g_key_file_get_boolean(gprs->settings,
-							SETTINGS_GROUP,
-							"RoamingAllowed",
-							&error);
-
-	if (error) {
-		g_error_free(error);
-		gprs->roaming_allowed = FALSE;
-		g_key_file_set_boolean(gprs->settings, SETTINGS_GROUP,
-					"RoamingAllowed",
-					gprs->roaming_allowed);
-	}
+	gprs->roaming_allowed = TRUE;
 
 	groups = g_key_file_get_groups(gprs->settings, NULL);
 
