@@ -294,7 +294,7 @@ static void hf_cnum_callback(const struct ofono_error *error, int total,
 		subscriber_number = g_new0(struct ofono_phone_number, 1);
 
 		subscriber_number->type = numbers[num].type;
-		strncpy(subscriber_number->number, numbers[num].number,
+		memcpy(subscriber_number->number, numbers[num].number,
 					OFONO_MAX_PHONE_NUMBER_LENGTH + 1);
 
 		hf->subscriber_numbers = g_slist_prepend(hf->subscriber_numbers,
