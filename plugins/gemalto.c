@@ -2356,7 +2356,7 @@ static void store_cgmm(gboolean ok, GAtResult *result, gpointer user_data)
 			continue;
 
 		if (model && *model) {
-			strncpy(data->modelstr, model, sizeof(data->modelstr));
+			memcpy(data->modelstr, model, sizeof(data->modelstr));
 
 			if (g_ascii_strncasecmp(model, "TC", 2) == 0)
 				data->model = 0x47;
@@ -2431,7 +2431,7 @@ static void store_sqport(gboolean ok, GAtResult *result, gpointer user_data)
 	if (!sqport || !*sqport)
 		goto done;
 
-	strncpy(data->sqport, sqport, sizeof(data->sqport));
+	memcpy(data->sqport, sqport, sizeof(data->sqport));
 
 done:
 	/* select mdm, app or gina port type */
