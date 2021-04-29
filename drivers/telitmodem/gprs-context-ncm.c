@@ -171,13 +171,13 @@ static void contrdp_cb(gboolean ok, GAtResult *result, gpointer user_data)
 			found = TRUE;
 
 			if (strcmp(gcd->address, "") != 0)
-				strncpy(gcd->netmask,
+				memcpy(gcd->netmask,
 					&ip_mask[strlen(gcd->address) + 1],
 					sizeof(gcd->netmask));
 
-			strncpy(gcd->gateway, gw, sizeof(gcd->gateway));
-			strncpy(gcd->dns1, dns1, sizeof(gcd->dns1));
-			strncpy(gcd->dns2, dns2, sizeof(gcd->dns2));
+			memcpy(gcd->gateway, gw, sizeof(gcd->gateway));
+			memcpy(gcd->dns1, dns1, sizeof(gcd->dns1));
+			memcpy(gcd->dns2, dns2, sizeof(gcd->dns2));
 		}
 	}
 
@@ -229,7 +229,7 @@ static void address_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	if (!g_at_result_iter_next_string(&iter, &address))
 		goto error;
 
-	strncpy(gcd->address, address, sizeof(gcd->address));
+	memcpy(gcd->address, address, sizeof(gcd->address));
 
 	sprintf(buf, "AT+CGCONTRDP=%d", gcd->active_context);
 	if (g_at_chat_send(gcd->chat, buf, cgcontrdp_prefix,
