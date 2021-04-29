@@ -147,7 +147,7 @@ static void rtnl_callback(int ifindex, const char *ifname, void *user_data)
 		return;
 	}
 
-	strncpy(gcd->interface, ifname, sizeof(gcd->interface));
+	memcpy(gcd->interface, ifname, sizeof(gcd->interface));
 	gcd->ifindex = ifindex;
 	gcd->created = TRUE;
 }
