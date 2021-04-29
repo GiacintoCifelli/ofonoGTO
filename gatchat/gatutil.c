@@ -87,11 +87,11 @@ void g_at_util_debug_chat(gboolean in, const char *str, gsize len,
 			escaped_str[escaped++] = 'n';
 			break;
 		case 26:
-			strncpy(&escaped_str[escaped], ctrlz, ctrlz_size);
+			memcpy(&escaped_str[escaped], ctrlz, ctrlz_size);
 			escaped += ctrlz_size;
 			break;
 		case 25:
-			strncpy(&escaped_str[escaped], esc, esc_size);
+			memcpy(&escaped_str[escaped], esc, esc_size);
 			escaped += esc_size;
 			break;
 		default:
