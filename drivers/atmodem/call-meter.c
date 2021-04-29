@@ -233,7 +233,7 @@ static void cpuc_query_cb(gboolean ok,
 	if (g_at_result_iter_next_string(&iter, &currency) != TRUE)
 		goto error;
 
-	strncpy(currency_buf, currency, sizeof(currency_buf));
+	memcpy(currency_buf, currency, sizeof(currency_buf));
 
 	if (g_at_result_iter_next_string(&iter, &ppu) != TRUE)
 		goto error;
