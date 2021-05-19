@@ -1733,9 +1733,9 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	 * frequent polling commands (e.g. if gemalto_csq_query is polled
 	 * every 5s then msec shall be more. In this case we put it to 6s)
 	 */
-	g_at_chat_set_wakeup_command(data->app, "ATT\r", 1000, 6000);
+	g_at_chat_set_wakeup_command(data->app, "AAT\r", 1000, 6000);
 	if(data->app != data->mdm && data->mdm)
-		g_at_chat_set_wakeup_command(data->mdm, "ATT\r", 1000, 6000);
+		g_at_chat_set_wakeup_command(data->mdm, "AAT\r", 1000, 6000);
 
 	g_at_chat_send(data->app, "ATE0", none_prefix, NULL, NULL, NULL);
 
