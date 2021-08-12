@@ -1520,8 +1520,13 @@ static void gemalto_smso_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	DBusMessage *reply;
 
-	if (data->hc_msg == NULL)
-		return;
+	if (data->hc_msg == NULL) {
+                /* hw_msg will be NULL when this cb
+                 * is called from gemalto_disable
+                 * */
+                if (ok)
+                        return ofono_modem_set_powered(modem, FALSE);
+        }
 
 	if (data->conn == GEMALTO_CONNECTION_SERIAL && ok) {
 	  ofono_modem_set_powered(modem, FALSE);
