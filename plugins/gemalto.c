@@ -94,6 +94,12 @@ void print_trace() {
 	}
 }
 
+static bool str_equal0(const char *str1, const char *str2) {
+	if(!str1 && !str2) return true;
+	if(!str1 || !str2) return false;
+	return g_str_equal(str1, str2);
+}
+
 /* debug utilities - end */
 
 enum gemalto_connection_type {
@@ -270,12 +276,13 @@ static void gemalto_signal(const char *iface, const char *name,
 	g_dbus_send_message(conn, signal);
 }
 
-static void executeWithPrompt(GAtChat *port, const char *command,
+static bool executeWithPrompt(GAtChat *port, const char *command,
 			const char *prompt, const char *argument, void *cb,
 			void *cbd, void *freecall)
 {
 	char *buf;
 	const char *expected_array[2] = {0,0};
+	bool ret;
 
 	buf = g_strdup_printf("%s\r%s", command, argument);
 
@@ -288,13 +295,228 @@ static void executeWithPrompt(GAtChat *port, const char *command,
 		sprintf(buf+strlen(buf)-2,"\r");
 
 	expected_array[0]=prompt;
-	g_at_chat_send_and_expect_short_prompt(port, buf, expected_array,
-							cb, cbd, freecall);
+	ret = g_at_chat_send_and_expect_short_prompt(port, buf, expected_array, cb, cbd, freecall);
 	free(buf);
+	return ret;
 }
 
-static void gemalto_exec_stored_cmd(struct ofono_modem *modem,
-							const char *filename)
+#define HARDWARE_MONITOR_INTERFACE OFONO_SERVICE ".gemalto.HardwareMonitor"
+
+struct gemalto_storedcmd_dataset {
+	struct ofono_modem *modem;
+	const char *filename;
+	char *command;
+	char *prompt;
+	char *argument;
+	char *check;
+	char *expect;
+	char *errorreport;
+	bool needreboot;
+	bool rebootpending;
+	int index;
+	bool finished;
+};
+
+static void gemalto_stored_checknset(struct gemalto_storedcmd_dataset *dataset);
+
+static void cleandataset(struct gemalto_storedcmd_dataset *dataset) {
+	free(dataset->check);
+	free(dataset->expect);
+	free(dataset->command);
+	free(dataset->prompt);
+	free(dataset->argument);
+	free(dataset->errorreport);
+	dataset->rebootpending = false;
+}
+
+static void freedataset(struct gemalto_storedcmd_dataset *dataset) {
+	cleandataset(dataset);
+	free(dataset);
+}
+
+static void gemalto_esc_checknset_part3(gboolean ok, GAtResult *result, gpointer user_data) {
+	struct gemalto_storedcmd_dataset *dataset = user_data;
+	GAtResultIter iter;
+	guint len = 0;
+	char *answer;
+
+	g_at_result_iter_init(&iter, result);
+	while (g_at_result_iter_next(&iter, NULL))
+		len += strlen(g_at_result_iter_raw_line(&iter))+2;
+	len += strlen(g_at_result_final_response(result))+3;
+	answer = g_new0(char, len);
+	g_at_result_iter_init(&iter, result);
+	while (g_at_result_iter_next(&iter, NULL))
+		sprintf(answer+strlen(answer),"%s\r\n", g_at_result_iter_raw_line(&iter));
+	sprintf(answer+strlen(answer),"%s\r\n", g_at_result_final_response(result));
+	DBG("good? %s, answer_len: %u, answer_string: %s", ok?"yes":"no", len, answer);
+
+	if(!ok && dataset->errorreport) {
+		char *sigmsg = g_new0(char, 128+strlen(dataset->command)+len);
+		sprintf(sigmsg, "step3: error in response of AT command %s, answer=%s", dataset->command, answer);
+		gemalto_signal(HARDWARE_MONITOR_INTERFACE, "CheckNSetError", sigmsg, dataset->modem);
+		DBG(REDCOLOR"signal: CheckNSetError: %s"NOCOLOR, sigmsg);
+		free(sigmsg);
+	}
+	g_free(answer);
+
+	if(!ok)
+		dataset->finished = false;
+
+	if(ok && dataset->rebootpending)
+		dataset->needreboot=true;
+	gemalto_stored_checknset(dataset); /* move to the next command */
+}
+
+static void gemalto_esc_checknset_part2(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct gemalto_storedcmd_dataset *dataset = user_data;
+	struct gemalto_data *data = ofono_modem_get_data(dataset->modem);
+	GAtResultIter iter;
+	guint len = 0;
+	char *answer;
+	bool match = false;
+	struct ofono_error error;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	g_at_result_iter_init(&iter, result);
+	while (g_at_result_iter_next(&iter, NULL))
+		DBG(REDCOLOR"%s"NOCOLOR, g_at_result_iter_raw_line(&iter));
+	g_at_result_iter_init(&iter, result);
+	while (g_at_result_iter_next(&iter, NULL))
+		len += strlen(g_at_result_iter_raw_line(&iter))+2;
+	if(ok) {
+		g_at_result_iter_init(&iter, result);
+		while (g_at_result_iter_next(&iter, NULL))
+			if(str_equal0(g_at_result_iter_raw_line(&iter), dataset->expect)) {
+				DBG("expected value %s found", dataset->expect);
+				match=true;
+			}
+		if(!match)
+			DBG("expected value %s NOT found", dataset->expect);
+	}
+	g_at_result_iter_init(&iter, result);
+	while (g_at_result_iter_next(&iter, NULL))
+		DBG(REDCOLOR"%s"NOCOLOR, g_at_result_iter_raw_line(&iter));
+
+	len += strlen(g_at_result_final_response(result))+3;
+	answer = g_new0(char, len);
+	g_at_result_iter_init(&iter, result);
+	while (g_at_result_iter_next(&iter, NULL))
+		sprintf(answer+strlen(answer),"%s\r\n", g_at_result_iter_raw_line(&iter));
+	sprintf(answer+strlen(answer),"%s\r\n", g_at_result_final_response(result));
+	DBG("good? %s, answer_len: %u, answer_string: %s", ok?"yes":"no", len, answer);
+
+	if(!ok && dataset->errorreport) {
+		char *sigmsg = g_new0(char, 128+strlen(dataset->check)+len);
+		sprintf(sigmsg, "step2: error in response of AT command %s, answer=%s", dataset->check, answer);
+		gemalto_signal(HARDWARE_MONITOR_INTERFACE, "CheckNSetError", sigmsg, dataset->modem);
+		DBG(REDCOLOR"signal: CheckNSetError: %s"NOCOLOR, sigmsg);
+		free(sigmsg);
+	}
+	g_free(answer);
+
+	if(!ok || match)
+		goto end;
+
+	if(dataset->prompt && dataset->argument) {
+		DBG(REDCOLOR"executing stored command with prompt: %s, %s"NOCOLOR, dataset->command, dataset->argument);
+		if(executeWithPrompt(data->app, dataset->command, dataset->prompt, dataset->argument, gemalto_esc_checknset_part3, dataset, NULL))
+			return;
+	} else {
+		DBG(REDCOLOR"executing stored command simple: %s"NOCOLOR, dataset->command);
+		if(g_at_chat_send(data->app, dataset->command, NULL, gemalto_esc_checknset_part3, dataset, NULL))
+			return;
+	}
+	{
+		char *sigmsg = g_new0(char, 128+strlen(dataset->command));
+		sprintf(sigmsg, "step2: error sending AT command %s", dataset->command);
+		gemalto_signal(HARDWARE_MONITOR_INTERFACE, "CheckNSetError", sigmsg, dataset->modem);
+		DBG(REDCOLOR"signal: CheckNSetError: %s"NOCOLOR, sigmsg);
+		free(sigmsg);
+	}
+
+end:
+	dataset->finished = false;
+	gemalto_stored_checknset(dataset); /* move to the next command */
+}
+
+static void gemalto_stored_checknset(struct gemalto_storedcmd_dataset *dataset) {
+	struct gemalto_data *data = ofono_modem_get_data(dataset->modem);
+	const char *vid = gemalto_get_string(dataset->modem, "Vendor");
+	const char *pid = gemalto_get_string(dataset->modem, "Model");
+	char store[64];
+	char *command, *prompt, *argument, *check, *expect, *reboot, *errorreport;
+	char key[32];
+	GKeyFile *f;
+
+	sprintf(store,"%s-%s/%s", vid, pid, dataset->filename);
+	f = storage_open(NULL, store);
+
+	if (!f || dataset->finished)
+		goto cleanup;
+
+	sprintf(key, "check_%d", dataset->index);
+	check = g_key_file_get_string(f, "CheckNSet", key, NULL);
+	sprintf(key, "expect_%d", dataset->index);
+	expect = g_key_file_get_string(f, "CheckNSet", key, NULL);
+
+	sprintf(key, "command_%d", dataset->index);
+	command = g_key_file_get_string(f, "CheckNSet", key, NULL);
+
+	sprintf(key, "prompt_%d", dataset->index);
+	prompt = g_key_file_get_string(f, "CheckNSet", key, NULL);
+	sprintf(key, "argument_%d", dataset->index);
+	argument = g_key_file_get_string(f, "CheckNSet", key, NULL);
+
+	sprintf(key, "reboot_%d", dataset->index);
+	reboot = g_key_file_get_string(f, "CheckNSet", key, NULL);
+	sprintf(key, "errorreport_%d", dataset->index);
+	errorreport = g_key_file_get_string(f, "CheckNSet", key, NULL);
+
+	if (check && expect && command) {
+		DBG(REDCOLOR"executing check command with prompt: %s"NOCOLOR, check);
+		cleandataset(dataset);
+		dataset->check = check;
+		dataset->expect = expect;
+		dataset->command = command;
+		dataset->prompt = prompt;
+		dataset->argument = argument;
+		dataset->errorreport = errorreport;
+		dataset->index++;
+		if(str_equal0(reboot,"now")) {
+			dataset->rebootpending = true; /* if this index will be set (successfully), it will not continue to the next key and ask for reboot */
+			dataset->finished = true;
+		} else if(str_equal0(reboot,"yes"))
+			dataset->rebootpending = true;
+		free(reboot);
+		if(g_at_chat_send(data->app, dataset->check, NULL, gemalto_esc_checknset_part2, dataset, NULL))
+			return;
+		{
+			char *sigmsg = g_new0(char, 128+strlen(dataset->check));
+			sprintf(sigmsg, "step2: error sending AT command %s", dataset->check);
+			gemalto_signal(HARDWARE_MONITOR_INTERFACE, "CheckNSetError", sigmsg, dataset->modem);
+			DBG(REDCOLOR"signal: CheckNSetError: %s"NOCOLOR, sigmsg);
+			free(sigmsg);
+		}
+	}
+
+	storage_close(NULL, store, f, FALSE);
+
+cleanup:
+	if(dataset->needreboot)
+	{
+		char *sigmsg = g_new0(char, 128+strlen(dataset->command));
+		sprintf(sigmsg, "command %s requires reboot after changes", dataset->command);
+		gemalto_signal(HARDWARE_MONITOR_INTERFACE, "RebootRequired", sigmsg, dataset->modem);
+		DBG(REDCOLOR"signal: RebootRequired: %s"NOCOLOR, sigmsg);
+		free(sigmsg);
+	}
+	freedataset(dataset);
+}
+
+static void gemalto_exec_stored_cmd(struct ofono_modem *modem, const char *filename)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	const char *vid = gemalto_get_string(modem, "Vendor");
@@ -304,6 +526,8 @@ static void gemalto_exec_stored_cmd(struct ofono_modem *modem,
 	char *command, *prompt, *argument;
 	char key[32];
 	GKeyFile *f;
+	struct gemalto_storedcmd_dataset *dataset = g_new0(struct gemalto_storedcmd_dataset, 1);
+	bool finished = false;
 
 	sprintf(store,"%s-%s/%s", vid, pid, filename);
 	f = storage_open(NULL, store);
@@ -311,41 +535,47 @@ static void gemalto_exec_stored_cmd(struct ofono_modem *modem,
 	if (!f)
 		return;
 
-	for (index = 0; ; index++) {
+	for (index = 0; !finished; index++) {
 		sprintf(key, "command_%d", index);
 		command = g_key_file_get_string(f, "Simple", key, NULL);
+		finished = command==NULL;
 
-		if (!command)
-			break;
-
-		DBG(REDCOLOR"executing stored command simple: %s"NOCOLOR, command);
-		g_at_chat_send(data->app, command, NULL, NULL, NULL, NULL);
+		if (command) {
+			DBG(REDCOLOR"executing stored command simple: %s"NOCOLOR, command);
+			g_at_chat_send(data->app, command, NULL, NULL, NULL, NULL);
+		}
+		free(command);
 	}
 
-	for (index = 0; ; index++) {
+	finished = false;
+	for (index = 0; !finished; index++) {
 		sprintf(key, "command_%d", index);
 		command = g_key_file_get_string(f, "WithPrompt", key, NULL);
+		finished = command==NULL;
 		sprintf(key, "prompt_%d", index);
 		prompt = g_key_file_get_string(f, "WithPrompt", key, NULL);
 		sprintf(key, "argument_%d", index);
 		argument = g_key_file_get_string(f, "WithPrompt", key, NULL);
 
-		if (!command || !prompt || !argument)
-			break;
-
-		DBG("executing stored command with prompt: %s", command);
-		executeWithPrompt(data->app, command, prompt, argument,
-			NULL, NULL, NULL);
+		if (command && prompt && argument) {
+			DBG(REDCOLOR"executing stored command with prompt: %s, %s"NOCOLOR, command, argument);
+			executeWithPrompt(data->app, command, prompt, argument, NULL, NULL, NULL);
+		}
+		free(command);
+		free(prompt);
+		free(argument);
 	}
 
 	storage_close(NULL, store, f, FALSE);
+	dataset->modem=modem;
+	dataset->filename=filename;
+	gemalto_stored_checknset(dataset);
 }
 
 /*******************************************************************************
  * Hardware monitor interface
  ******************************************************************************/
 
-#define HARDWARE_MONITOR_INTERFACE OFONO_SERVICE ".gemalto.HardwareMonitor"
 #define CINTERION_LEGACY_HWMON_INTERFACE OFONO_SERVICE ".cinterion.HardwareMonitor"
 
 static void gemalto_sctmb_notify(GAtResult *result, gpointer user_data)
@@ -501,6 +731,10 @@ static const GDBusSignalTable hardware_monitor_signals[] = {
 			GDBUS_ARGS({ "temperature", "a{sv}" }) )},
 	{ GDBUS_SIGNAL("CriticalVoltage",
 			GDBUS_ARGS({ "voltage", "a{sv}" }) )},
+	{ GDBUS_SIGNAL("RebootRequired",
+			GDBUS_ARGS({ "description", "s" }) )},
+	{ GDBUS_SIGNAL("CheckNSetError",
+			GDBUS_ARGS({ "description", "s" }) )},
 	{}
 };
 
