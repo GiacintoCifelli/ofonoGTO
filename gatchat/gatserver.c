@@ -968,7 +968,7 @@ static char *extract_line(GAtServer *p, struct ring_buffer *rbuf)
 	/* We will strip AT and S3 */
 	line_length -= 3;
 
-	line = g_try_new(char, line_length + 1);
+	line = g_try_new0(char, line_length + 1);
 	if (line == NULL) {
 		ring_buffer_drain(rbuf, p->read_so_far);
 		return NULL;

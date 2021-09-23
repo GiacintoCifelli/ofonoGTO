@@ -262,7 +262,7 @@ static struct at_command *at_command_create(guint gid, const char *cmd,
 		return 0;
 
 	len = strlen(cmd);
-	c->cmd = g_try_new(char, len + 2);
+	c->cmd = g_try_new0(char, len + 2);
 	if (c->cmd == NULL) {
 		g_free(c);
 		return 0;
@@ -712,7 +712,7 @@ static char *extract_line(struct at_chat *p, struct ring_buffer *rbuf)
 			buf = ring_buffer_read_ptr(rbuf, pos);
 	}
 
-	line = g_try_new(char, line_length + 1);
+	line = g_try_new0(char, line_length + 1);
 	if (line == NULL) {
 		ring_buffer_drain(rbuf, p->read_so_far);
 		return NULL;
