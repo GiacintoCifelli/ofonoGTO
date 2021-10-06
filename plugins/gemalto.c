@@ -281,21 +281,45 @@ static bool executeWithPrompt(GAtChat *port, const char *command,
 			void *cbd, void *freecall)
 {
 	char *buf;
-	const char *expected_array[2] = {0,0};
+	char **expected_array = NULL;
 	bool ret;
+	const char *found = prompt;
+	int promptlines = 1;
+	int pl;
 
 	buf = g_strdup_printf("%s\r%s", command, argument);
 
-	if (strlen(argument)>=2 && g_str_equal(argument+strlen(argument)-2,
-									"^Z"))
+	if (strlen(argument)>=2 && g_str_equal(argument+strlen(argument)-2, "^Z"))
 		sprintf(buf+strlen(buf)-2,"\x1a");
 
-	if (strlen(argument)>=2 && g_str_equal(argument+strlen(argument)-2,
-									"\\r"))
+	if (strlen(argument)>=2 && g_str_equal(argument+strlen(argument)-2, "\\r"))
 		sprintf(buf+strlen(buf)-2,"\r");
 
-	expected_array[0]=prompt;
-	ret = g_at_chat_send_and_expect_short_prompt(port, buf, expected_array, cb, cbd, freecall);
+	while((found = strchr(found, '|')) != NULL)  {
+		promptlines++;
+		found++;
+	}
+
+	expected_array = g_new0(char *, promptlines+1);
+	found = prompt;
+	DBG("found='%s', promptlines=%d", found, promptlines);
+	for(pl=0;pl<promptlines;pl++) {
+		const char *fnl = strchr(found, '|');
+		if(fnl) {
+			int len = fnl-found;
+			expected_array[pl] = g_new0(char, len+1);
+			memcpy(expected_array[pl], found, len);
+			found = fnl + 1;
+		} else { /* last or only prompt line */
+			int len = strlen(found);
+			expected_array[pl] = g_new0(char, len +1);
+			memcpy(expected_array[pl], found, len);
+		}
+		DBG("prompt='%s'", expected_array[pl]);
+	}
+
+	ret = g_at_chat_send_and_expect_short_prompt(port, buf, (const char **)expected_array, cb, cbd, freecall);
+	g_strfreev(expected_array);
 	free(buf);
 	return ret;
 }

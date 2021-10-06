@@ -102,7 +102,7 @@ struct at_chat {
 	gboolean in_read_handler;		/* Re-entrancy guard */
 	gboolean in_notify;
 	GSList *terminator_list;		/* Non-standard terminator */
-	guint16 terminator_blacklist;		/* Blacklisted terinators */
+	guint16 terminator_blacklist;		/* Blacklisted terminators */
 };
 
 struct _GAtChat {
@@ -513,6 +513,18 @@ static gboolean at_chat_handle_command_response(struct at_chat *p,
 	int size = sizeof(terminator_table) / sizeof(struct terminator_info);
 	int hint;
 	GSList *l;
+	gboolean returnfalse = FALSE;
+
+	if (cmd->prefixes) {
+		int n;
+
+		for (n = 0; cmd->prefixes[n]; n++)
+			if (g_str_has_prefix(line, cmd->prefixes[n]))
+				goto out;
+
+		returnfalse = TRUE;
+
+	}
 
 	for (i = 0; i < size; i++) {
 		struct terminator_info *info = &terminator_table[i];
@@ -531,15 +543,8 @@ static gboolean at_chat_handle_command_response(struct at_chat *p,
 		}
 	}
 
-	if (cmd->prefixes) {
-		int n;
-
-		for (n = 0; cmd->prefixes[n]; n++)
-			if (g_str_has_prefix(line, cmd->prefixes[n]))
-				goto out;
-
+	if(returnfalse)
 		return FALSE;
-	}
 
 out:
 	if (cmd->listing && (cmd->flags & COMMAND_FLAG_EXPECT_PDU))
