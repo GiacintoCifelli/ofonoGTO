@@ -477,7 +477,8 @@ static const char *__error_to_string(uint16_t error)
 	return NULL;
 }
 
-int qmi_error_to_ofono_cme(int qmi_error) {
+int qmi_error_to_ofono_cme(int qmi_error)
+{
 	switch (qmi_error) {
 	case 0x0019:
 		return 4; /* Not Supported */
@@ -1209,10 +1210,10 @@ static void discover_callback(uint16_t message, uint16_t length,
 
 		if (name)
 			__debug_device(device, "found service [%s %d.%d]",
-				       name, major, minor);
+					name, major, minor);
 		else
 			__debug_device(device, "found service [%d %d.%d]",
-				       type, major, minor);
+					type, major, minor);
 
 		if (type == QMI_SERVICE_CONTROL) {
 			device->control_major = major;
@@ -1628,7 +1629,6 @@ bool qmi_device_set_expected_data_format(struct qmi_device *device,
 	}
 
 	res = true;
-	DBG("set %s to '%c' successfully", sysfs_path, value);
 
 done:
 	if (fd >= 0)
@@ -1928,6 +1928,49 @@ bool qmi_result_get_uint64(struct qmi_result *result, uint8_t type,
 		*value = GUINT64_FROM_LE(tmp);
 
 	return true;
+}
+
+bool qmi_result_get_ipv6_element(struct qmi_result *result, uint8_t type,
+				uint8_t *prefix_len, struct in6_addr *addr)
+{
+	const unsigned char *ptr;
+	uint16_t len;
+
+	if (!result || !type)
+		return false;
+
+	ptr = tlv_get(result->data, result->length, type, &len);
+	if (ptr != NULL) {
+		if (addr)
+			memcpy(&addr->s6_addr, ptr, 16);
+
+		if (prefix_len)
+			*prefix_len = ptr[16];
+
+		return true;
+	} else {
+		return false;
+	}
+}
+
+bool qmi_result_get_ipv6_address(struct qmi_result *result, uint8_t type,
+						struct in6_addr *addr)
+{
+	const unsigned char *ptr;
+	uint16_t len;
+
+	if (!result || !type)
+		return false;
+
+	ptr = tlv_get(result->data, result->length, type, &len);
+	if (ptr != NULL) {
+		if (addr)
+			memcpy(&addr->s6_addr, ptr, 16);
+
+		return true;
+	} else {
+		return false;
+	}
 }
 
 struct service_create_data {

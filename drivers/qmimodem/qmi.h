@@ -21,6 +21,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 #define QMI_SERVICE_CONTROL	0	/* Control service */
 #define QMI_SERVICE_WDS		1	/* Wireless data service */
@@ -138,6 +140,11 @@ bool qmi_result_get_uint32(struct qmi_result *result, uint8_t type,
 							uint32_t *value);
 bool qmi_result_get_uint64(struct qmi_result *result, uint8_t type,
 							uint64_t *value);
+bool qmi_result_get_ipv6_element(struct qmi_result *result, uint8_t type,
+				uint8_t *prefix_len, struct in6_addr *addr);
+bool qmi_result_get_ipv6_address(struct qmi_result *result, uint8_t type,
+						struct in6_addr *addr);
+
 void qmi_result_print_tlvs(struct qmi_result *result);
 
 int qmi_error_to_ofono_cme(int qmi_error);
