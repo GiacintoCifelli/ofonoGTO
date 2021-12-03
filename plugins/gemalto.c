@@ -199,6 +199,8 @@ struct gemalto_data {
 	} hwmon;
 	/* gnss variables */
 	DBusMessage *gnss_msg;
+	char *gnss_prop_name;
+	char *gnss_prop_value;
 	/* hardware control variables */
 	DBusMessage *hc_msg;
 	gboolean powersave;
@@ -1210,6 +1212,8 @@ static void gnss_set_properties_cb(gboolean ok, GAtResult *result,
 	struct ofono_modem *modem = user_data;
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	DBusMessage *reply;
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = ofono_modem_get_path(modem);
 
 	if (data->gnss_msg == NULL)
 		return;
@@ -1217,11 +1221,21 @@ static void gnss_set_properties_cb(gboolean ok, GAtResult *result,
 	if (!ok) {
 		__ofono_dbus_pending_reply(&data->gnss_msg,
 					__ofono_error_failed(data->gnss_msg));
+		g_clear_pointer(&data->gnss_prop_name, g_free);
+		g_clear_pointer(&data->gnss_prop_value, g_free);
 		return;
 	}
 
 	reply = dbus_message_new_method_return(data->gnss_msg);
 	__ofono_dbus_pending_reply(&data->gnss_msg, reply);
+
+	ofono_dbus_signal_property_changed(conn, path,
+	                                   GNSS_INTERFACE,
+	                                   data->gnss_prop_name,
+	                                   DBUS_TYPE_STRING, &data->gnss_prop_value);
+
+	g_clear_pointer(&data->gnss_prop_name, g_free);
+	g_clear_pointer(&data->gnss_prop_value, g_free);
 }
 
 static DBusMessage *gnss_set_property(DBusConnection *conn,
@@ -1264,6 +1278,8 @@ static DBusMessage *gnss_set_property(DBusConnection *conn,
 		return __ofono_error_failed(msg);
 
 	data->gnss_msg = dbus_message_ref(msg);
+	data->gnss_prop_name = g_strdup(name);
+	data->gnss_prop_value = g_strdup(value);
 	return NULL;
 }
 
@@ -1274,6 +1290,12 @@ static const GDBusMethodTable gnss_methods[] = {
 	{ GDBUS_ASYNC_METHOD("SetProperty",
 			GDBUS_ARGS({ "property", "s" }, { "value", "v" }),
 			NULL, gnss_set_property) },
+	{ }
+};
+
+static const GDBusSignalTable gnss_signals[] = {
+	{ GDBUS_SIGNAL("PropertyChanged",
+			GDBUS_ARGS({ "name", "s" }, { "value", "v" })) },
 	{ }
 };
 
@@ -1329,7 +1351,7 @@ static void gemalto_gnss_enable_cb(gboolean ok, GAtResult *result,
 	/* Create GNSS DBus interface */
 	if (!g_dbus_register_interface(conn, path, GNSS_INTERFACE,
 					gnss_methods,
-					NULL,
+					gnss_signals,
 					NULL,
 					modem,
 					NULL)) {
