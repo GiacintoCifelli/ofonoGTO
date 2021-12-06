@@ -32,7 +32,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include <glib.h>
+#include <stdio.h>
 
 #include "storage.h"
 
@@ -227,4 +227,25 @@ void storage_close(const char *imsi, const char *store, GKeyFile *keyfile,
 		storage_sync(imsi, store, keyfile);
 
 	g_key_file_free(keyfile);
+}
+
+void storage_flush(const char *imsi, const char *store)
+{
+	/* Flush the file */
+	FILE *fp = NULL;
+	gchar *path = NULL;
+	if (imsi)
+		path = g_strdup_printf(STORAGEDIR "/%s/%s", imsi, store);
+	else
+		path = g_strdup_printf(STORAGEDIR "/%s", store);
+
+	if (path == NULL)
+		return;
+
+	fp = fopen(path, "r");
+	if (fp != NULL) {
+		fflush(fp);
+		fclose(fp);
+	}
+	g_free(path);
 }

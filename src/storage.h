@@ -27,6 +27,7 @@
 
 #include <fcntl.h>
 #include <sys/types.h>
+#include <glib.h>
 
 int create_dirs(const char *filename, const mode_t mode);
 
@@ -42,3 +43,4 @@ GKeyFile *storage_open(const char *imsi, const char *store);
 void storage_sync(const char *imsi, const char *store, GKeyFile *keyfile);
 void storage_close(const char *imsi, const char *store, GKeyFile *keyfile,
 			gboolean save);
+void storage_flush(const char *imsi, const char *store);
