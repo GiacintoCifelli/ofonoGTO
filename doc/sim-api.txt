@@ -205,3 +205,12 @@ Properties	boolean Present [readonly]
 
 			Contains the SIM's ImsPrivateIdentity, read from the
 			ISIM.
+
+		string EmbeddedUICCIdentificationNumber [readonly, optional]
+
+			Contains the Identification Number of the Embedded UICC
+			chip if populated.
+
+			Note that this value is returned by the modem and it may
+			return an euiccid even if an esim is populated.
+			(case of PLS8, PLS62 and PLS83 modems)

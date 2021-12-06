@@ -77,6 +77,7 @@ static const char *ccho_prefix[] = { "+CCHO:", NULL };
 static const char *crla_prefix[] = { "+CRLA:", NULL };
 static const char *cgla_prefix[] = { "+CGLA:", NULL };
 static const char *cimi_prefix[] = { "+CIMI:", NULL };
+static const char *sind_prefix[] = { "^SIND:", NULL };
 static const char *none_prefix[] = { NULL };
 
 static void append_file_path(char *buf, const unsigned char *path,
@@ -491,6 +492,59 @@ static void at_read_imsi(struct ofono_sim *sim, ofono_sim_imsi_cb_t cb,
 		if (g_at_chat_send(sd->chat, "AT+CIMI", NULL, at_cimi_cb, cbd, g_free) > 0)
 			return;
 	}
+
+	g_free(cbd);
+	CALLBACK_WITH_FAILURE(cb, NULL, data);
+}
+
+static void at_sind_euiccid_read_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	GAtResultIter iter;
+	ofono_sim_euiccid_cb_t cb = cbd->cb;
+	struct ofono_error error;
+	const char *euccid;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+	if (!ok) {
+		cb(&error, NULL, cbd->data);
+		return;
+	}
+
+	g_at_result_iter_init(&iter, result);
+	if (!g_at_result_iter_next(&iter, "^SIND: euiccid,"))
+		goto error;
+
+	/* Skip mode since we are not interested in this */
+	if (!g_at_result_iter_skip_next(&iter))
+		goto error;
+
+	if (!g_at_result_iter_next_string(&iter, &euccid))
+		goto error;
+
+	/* euccid can be returned empty without error */
+	if (!strlen(euccid)) 
+		goto error;
+
+	DBG("eUICCID: %s", euccid);
+
+	cb(&error, euccid, cbd->data);
+	return;
+
+error:
+	CALLBACK_WITH_FAILURE(cb, NULL, cbd->data);
+
+}
+
+static void at_read_euiccid(struct ofono_sim *sim, ofono_sim_euiccid_cb_t cb,
+				void *data)
+{
+	struct sim_data *sd = ofono_sim_get_data(sim);
+	struct cb_data *cbd = cb_data_new(cb, data);
+
+	if (g_at_chat_send(sd->chat, "AT^SIND=\"euiccid\",2", sind_prefix,
+				at_sind_euiccid_read_cb, cbd, g_free) > 0)
+		return;
 
 	g_free(cbd);
 	CALLBACK_WITH_FAILURE(cb, NULL, data);
@@ -2041,6 +2095,7 @@ static const struct ofono_sim_driver driver = {
 	.write_file_linear	= at_sim_update_record,
 	.write_file_cyclic	= at_sim_update_cyclic,
 	.read_imsi		= at_read_imsi,
+	.read_euiccid		= at_read_euiccid,
 	.query_passwd_state	= at_pin_query,
 	.query_pin_retries	= at_pin_retries_query,
 	.send_passwd		= at_pin_send,

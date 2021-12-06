@@ -98,6 +98,9 @@ typedef void (*ofono_sim_write_cb_t)(const struct ofono_error *error,
 typedef void (*ofono_sim_imsi_cb_t)(const struct ofono_error *error,
 					const char *imsi, void *data);
 
+typedef void (*ofono_sim_euiccid_cb_t)(const struct ofono_error *error,
+					const char *euiccid, void *data);
+
 typedef void (*ofono_sim_state_event_cb_t)(enum ofono_sim_state new_state,
 					void *data);
 
@@ -165,6 +168,8 @@ struct ofono_sim_driver {
 			ofono_sim_write_cb_t cb, void *data);
 	void (*read_imsi)(struct ofono_sim *sim,
 			ofono_sim_imsi_cb_t cb, void *data);
+	void (*read_euiccid)(struct ofono_sim *sim,
+			ofono_sim_euiccid_cb_t cb, void *data);
 	void (*query_passwd_state)(struct ofono_sim *sim,
 			ofono_sim_passwd_cb_t cb, void *data);
 	void (*send_passwd)(struct ofono_sim *sim, const char *passwd,

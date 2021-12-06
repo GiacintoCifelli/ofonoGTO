@@ -69,6 +69,7 @@ struct ofono_sim_aid_session {
 struct ofono_sim {
 	/* Contents of the SIM file system, in rough initialization order */
 	char *iccid;
+	char *euiccid;
 
 	char **language_prefs;
 	unsigned char *efli;
@@ -397,6 +398,10 @@ static DBusMessage *sim_get_properties(DBusConnection *conn,
 
 	if (!present)
 		goto done;
+
+	if (sim->euiccid)
+		ofono_dbus_dict_append(&dict, "EmbeddedUICCIdentificationNumber",
+					DBUS_TYPE_STRING, &sim->euiccid);
 
 	if (sim->iccid)
 		ofono_dbus_dict_append(&dict, "CardIdentifier",
@@ -1653,6 +1658,38 @@ static void sim_retrieve_imsi(struct ofono_sim *sim)
 						NULL, 0, sim_efimsi_cb, sim);
 }
 
+static void sim_euiccid_obtained(struct ofono_sim *sim, const char *euiccid)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path = __ofono_atom_get_path(sim->atom);
+
+	sim->euiccid = g_strdup(euiccid);
+
+	ofono_dbus_signal_property_changed(conn, path,
+					OFONO_SIM_MANAGER_INTERFACE,
+					"EmbeddedUICCIdentificationNumber",
+					DBUS_TYPE_STRING, &sim->euiccid);
+}
+
+static void sim_euiccid_cb(const struct ofono_error *error, const char *euiccid,
+			void *data)
+{
+	struct ofono_sim *sim = data;
+
+	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
+		ofono_error("Unable to read eUICCID, maybe not supported");
+		return;
+	}
+
+	sim_euiccid_obtained(sim, euiccid);
+}
+
+static void  sim_retrieve_euiccid(struct ofono_sim *sim)
+{
+	if (sim->driver->read_euiccid)
+		sim->driver->read_euiccid(sim, sim_euiccid_cb, sim);
+}
+
 static void sim_fdn_enabled(struct ofono_sim *sim)
 {
 	DBusConnection *conn = ofono_dbus_get_connection();
@@ -1696,8 +1733,10 @@ static void sim_efbdn_info_read_cb(int ok, unsigned char file_status,
 		sim_bdn_enabled(sim);
 
 out:
-	if (!sim->fixed_dialing && !sim->barred_dialing)
+	if (!sim->fixed_dialing && !sim->barred_dialing) {
 		sim_retrieve_imsi(sim);
+		sim_retrieve_euiccid(sim);
+	}
 }
 
 static gboolean check_bdn_status(struct ofono_sim *sim)
@@ -1733,8 +1772,10 @@ static void sim_efadn_info_read_cb(int ok, unsigned char file_status,
 
 out:
 	if (check_bdn_status(sim) != TRUE) {
-		if (!sim->fixed_dialing && !sim->barred_dialing)
+		if (!sim->fixed_dialing && !sim->barred_dialing) {
 			sim_retrieve_imsi(sim);
+			sim_retrieve_euiccid(sim);
+		}
 	}
 }
 
@@ -1774,6 +1815,7 @@ static void sim_efsst_read_cb(int ok, int length, int record,
 
 out:
 	sim_retrieve_imsi(sim);
+	sim_retrieve_euiccid(sim);
 }
 
 static void sim_efest_read_cb(int ok, int length, int record,
@@ -1817,8 +1859,10 @@ static void sim_efest_read_cb(int ok, int length, int record,
 		sim_bdn_enabled(sim);
 
 out:
-	if (!sim->fixed_dialing && !sim->barred_dialing)
+	if (!sim->fixed_dialing && !sim->barred_dialing) {
 		sim_retrieve_imsi(sim);
+		sim_retrieve_euiccid(sim);
+	}
 }
 
 static void sim_efust_read_cb(int ok, int length, int record,
@@ -1861,6 +1905,7 @@ static void sim_efust_read_cb(int ok, int length, int record,
 
 out:
 	sim_retrieve_imsi(sim);
+	sim_retrieve_euiccid(sim);
 }
 
 static void sim_cphs_information_read_cb(int ok, int length, int record,
@@ -2534,6 +2579,11 @@ static void sim_free_main_state(struct ofono_sim *sim)
 	if (sim->imsi) {
 		g_free(sim->imsi);
 		sim->imsi = NULL;
+	}
+
+	if (sim->euiccid) {
+		g_free(sim->euiccid);
+		sim->euiccid = NULL;
 	}
 
 	sim->mcc[0] = '\0';
