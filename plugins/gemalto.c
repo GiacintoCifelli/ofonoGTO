@@ -48,6 +48,7 @@
 #include <ofono/netreg.h>
 #include <ofono/phonebook.h>
 #include <ofono/sim.h>
+#include <ofono/cbs.h>
 #include <ofono/sms.h>
 #include <ofono/gprs.h>
 #include <ofono/gprs-context.h>
@@ -3168,6 +3169,8 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 		ofono_message_waiting_register(mw);
 
 	data->netreg = ofono_netreg_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
+
+	ofono_cbs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
 }
 
 static int gemalto_post_online_delayed(void *modem)
