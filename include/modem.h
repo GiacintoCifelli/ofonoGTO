@@ -46,6 +46,8 @@ typedef void (*ofono_modem_online_cb_t)(const struct ofono_error *error,
 typedef ofono_bool_t (*ofono_modem_compare_cb_t)(struct ofono_modem *modem,
 							void *user_data);
 
+typedef void (*ofono_modem_sw_reset_cb_t)(const struct ofono_error *error, void *data);
+
 struct ofono_modem_driver {
 	const char *name;
 	enum ofono_modem_type modem_type;
@@ -75,6 +77,10 @@ struct ofono_modem_driver {
 
 	/* Populate the atoms available online */
 	void (*post_online)(struct ofono_modem *modem);
+
+	/* Software reset */
+	void (*sw_reset)(struct ofono_modem *modem, ofono_bool_t online, ofono_modem_sw_reset_cb_t callback);
+
 };
 
 void ofono_modem_add_interface(struct ofono_modem *modem,

@@ -879,6 +879,40 @@ void __ofono_modem_append_properties(struct ofono_modem *modem,
 	ofono_dbus_dict_append(dict, "Type", DBUS_TYPE_STRING, &strtype);
 }
 
+static void modem_sw_reset_cb(const struct ofono_error *error, void* data)
+{
+	DBusMessage *reply;
+	struct ofono_modem *modem = data;
+	DBusConnection *conn = ofono_dbus_get_connection();
+
+	if (error->type == OFONO_ERROR_TYPE_NO_ERROR) {
+		/* Signal that sofware reset is in progress */
+		g_dbus_emit_signal(conn, modem->path, OFONO_MODEM_INTERFACE, "SoftwareResetCalled", DBUS_TYPE_INVALID);
+		reply = dbus_message_new_method_return(modem->pending);
+	} else {
+		reply = __ofono_error_failed(modem->pending);
+	}
+	__ofono_dbus_pending_reply(&modem->pending, reply);
+}
+
+static DBusMessage *modem_software_reset(DBusConnection *conn, DBusMessage *msg, void *data)
+{
+	struct ofono_modem *modem = data;
+	struct ofono_modem_driver const *driver = modem->driver;
+
+	if (driver->sw_reset) {
+		if (modem->pending != NULL)
+			return __ofono_error_busy(msg);
+
+		modem->pending = dbus_message_ref(msg);
+		/* asynchronous call to software reset the modem */
+		driver->sw_reset(modem, modem->online, modem_sw_reset_cb);
+	} else {
+		return __ofono_error_not_implemented(msg);
+	}
+	return NULL;
+}
+
 static DBusMessage *modem_get_properties(DBusConnection *conn,
 						DBusMessage *msg, void *data)
 {
@@ -1182,12 +1216,16 @@ static const GDBusMethodTable modem_methods[] = {
 	{ GDBUS_ASYNC_METHOD("SetProperty",
 			GDBUS_ARGS({ "property", "s" }, { "value", "v" }),
 			NULL, modem_set_property) },
+	{ GDBUS_ASYNC_METHOD("SoftwareReset",
+			NULL, NULL,
+			modem_software_reset) },
 	{ }
 };
 
 static const GDBusSignalTable modem_signals[] = {
 	{ GDBUS_SIGNAL("PropertyChanged",
 			GDBUS_ARGS({ "name", "s" }, { "value", "v" })) },
+	{ GDBUS_SIGNAL("SoftwareResetCalled", NULL) },
 	{ }
 };
 

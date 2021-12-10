@@ -3194,6 +3194,35 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 	ofono_cbs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
 }
 
+static void sw_reset_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	ofono_modem_sw_reset_cb_t cb = cbd->cb;
+	struct ofono_error error;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	cb(&error, cbd->data);
+}
+
+static void gemalto_sw_reset(struct ofono_modem *modem, ofono_bool_t online, ofono_modem_sw_reset_cb_t cb)
+{
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	struct cb_data *cbd = cb_data_new(cb, modem);
+
+	DBG("%p", modem);
+
+	/*
+	 * AT+CFUN=4,1 should set modem to offline after reset but when it appears,
+	 * it is automatically set to online (see post_sim method)
+	 */
+	if (online)
+		g_at_chat_send(data->app, "AT+CFUN=1,1", cfun_prefix, sw_reset_cb, cbd, NULL);
+	else
+		g_at_chat_send(data->app, "AT+CFUN=4,1", cfun_prefix, sw_reset_cb, cbd, NULL);
+}
+
+
 static int gemalto_post_online_delayed(void *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
@@ -3319,6 +3348,7 @@ static const struct ofono_modem_driver gemalto_driver = {
 	.pre_sim	= gemalto_pre_sim,
 	.post_sim	= gemalto_post_sim,
 	.post_online	= gemalto_post_online,
+	.sw_reset	= gemalto_sw_reset,
 };
 
 static int gemalto_init(void)
