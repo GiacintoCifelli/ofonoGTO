@@ -105,7 +105,7 @@ static void get_settings_cb(struct qmi_result *result, void *user_data)
 	if (qmi_result_get_uint8(result, QMI_WDS_RESULT_IP_FAMILY, &ip_family))
 		DBG("IP family %d", ip_family);
 
-	if (ip_family == QMI_WDS_IP_FAMILY_IPV4) {
+	/*if (ip_family == QMI_WDS_IP_FAMILY_IPV4)*/ {
 		uint32_t ip_addr;
 		struct in_addr addr;
 		char* straddr;
@@ -158,7 +158,7 @@ static void get_settings_cb(struct qmi_result *result, void *user_data)
 			DBG("MTU: %d", mtu);
 			ofono_gprs_context_set_ipv4_mtu(gc, mtu);
 		}
-	} else if (ip_family == QMI_WDS_IP_FAMILY_IPV6) {
+	} /*else if (ip_family == QMI_WDS_IP_FAMILY_IPV6)*/ {
 		struct in6_addr ipv6;
 		uint8_t prefix;
 		char buff[INET6_ADDRSTRLEN];
@@ -268,7 +268,7 @@ error:
 	CALLBACK_WITH_FAILURE(cb, cbd->data);
 }
 
-#if 0
+#if 0 /* from a newer ofono baseline */
 /*
  * This function gets called for "automatic" contexts, those which are
  * not activated via activate_primary.  For these, we will still need
@@ -369,6 +369,9 @@ static void qmi_activate_primary(struct ofono_gprs_context *gc,
 		break;
 	case OFONO_GPRS_PROTO_IPV6:
 		ip_family = 6;
+		break;
+	case OFONO_GPRS_PROTO_IPV4V6: /* accepted but will activate IPv4 */
+		ip_family = 8;
 		break;
 	default:
 		goto error;
