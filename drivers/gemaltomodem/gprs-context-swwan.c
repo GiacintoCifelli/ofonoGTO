@@ -119,6 +119,7 @@ static void gemalto_gprs_activate_primary(struct ofono_gprs_context *gc,
 	char *buf_apn;
 	char *buf_auth;
 	char buf[256];
+	const char *pid = ofono_modem_get_string(modem, "Model");
 
 	DBG("cid %u", ctx->cid);
 
@@ -133,6 +134,13 @@ static void gemalto_gprs_activate_primary(struct ofono_gprs_context *gc,
 	buf_auth = gemalto_get_auth_command(modem, gcd->active_context,
 				ctx->auth_method, ctx->username, ctx->password);
 
+	if(g_str_equal(pid,"005b")) /* for PLS62-W in ecm mode, we skip it, as this chipset won't support a perturbation of the default APN */
+	{
+		g_free(buf_apn);
+		g_free(buf_auth);
+		buf_apn  = g_strdup("AT");
+		buf_auth = g_strdup("AT");
+	}
 	/*
 	 * note that if the cgdcont or auth commands are not ok we ignore them
 	 * and continue but if the sending fails we do an error
