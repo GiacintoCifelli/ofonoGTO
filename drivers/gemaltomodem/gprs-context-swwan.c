@@ -225,7 +225,7 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 
 	DBG("%s", event);
 
-	if (!g_str_has_prefix(event, "NW DEACT"))
+	if (!g_str_has_prefix(event, "NW DEACT") && !g_str_has_prefix(event, "PDN DEACT"))
 		return;
 
 	if (!g_at_result_iter_skip_next(&iter)) // "DEACT"
