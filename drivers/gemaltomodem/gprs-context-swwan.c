@@ -215,6 +215,9 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 	int cid;
 	GAtResultIter iter;
 
+	if(!gcd)
+		return;
+
 	g_at_result_iter_init(&iter, result);
 
 	if (!g_at_result_iter_next(&iter, "+CGEV:"))
