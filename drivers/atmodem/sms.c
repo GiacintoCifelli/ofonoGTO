@@ -787,7 +787,7 @@ static void at_cnmi_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	struct ofono_sms *sms = user_data;
 
 	if (!ok)
-		return at_sms_not_supported(sms);
+		ofono_error("CNMI AT command returns an error, ignore it to consider SMS supported");
 
 	at_sms_initialized(sms);
 }
