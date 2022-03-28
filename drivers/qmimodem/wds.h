@@ -26,7 +26,7 @@
 #define QMI_WDS_PKT_STATUS_IND	34	/* Packet data connection status indication */
 
 #define QMI_WDS_GET_SETTINGS	45	/* Get the runtime data session settings */
-
+#define QMI_WDS_SET_CLIENT_IP_FAMILY_PREF	0x4D	/* Set client ip family pref */
 
 /* Start WDS network interface */
 #define QMI_WDS_PARAM_APN			0x14	/* string */
@@ -106,4 +106,9 @@ typedef enum {
 
 #define QMI_WDS_IP_FAMILY_IPV4			0x04
 #define QMI_WDS_IP_FAMILY_IPV6			0x06
+
+/* set client ip family pref */
+#define QMI_WDS_CLIENT_IP_FAMILY_PREF		0x01
+
+
 #endif  /* OFONO_WDS_H */
