@@ -157,6 +157,7 @@ struct gemalto_data {
 
 	guint model;
 	guint probing_timer;
+	guint simstatus_timer;
 	guint init_waiting_time;
 	guint port_answers;
 	guint waiting_time;
@@ -1694,6 +1695,11 @@ static void gemalto_remove(struct ofono_modem *modem)
 		data->probing_timer = 0;
 	}
 
+	if (data->simstatus_timer) {
+		g_source_remove(data->simstatus_timer);
+		data->simstatus_timer = 0;
+	}
+
 	if (data->online_timer) {
 		g_source_remove(data->online_timer);
 		data->online_timer = 0;
@@ -1751,6 +1757,7 @@ static int gemalto_ciev_simstatus_delayed(void *modem) {
 	data->sim_state_query = at_util_sim_state_query_new(data->app,
 				1, 20, sim_ready_cb, modem,
 				NULL);
+	data->simstatus_timer = 0;
 	return FALSE; /* to kill the timer */
 }
 
@@ -1783,7 +1790,9 @@ static void gemalto_ciev_simstatus_notify(GAtResultIter *iter, struct ofono_mode
 	/* SIM is inserted inside the holder */
 	case 1:
 		/* delay for 2 seconds the AT+CPIN? check, to make sure the sim is powered, otherwise we can get a SIM failure (error 13) */
-		g_timeout_add_seconds(2, gemalto_ciev_simstatus_delayed, modem);
+		if (data->simstatus_timer)
+			g_source_remove(data->simstatus_timer);
+		data->simstatus_timer = g_timeout_add_seconds(2, gemalto_ciev_simstatus_delayed, modem);
 		break;
 
 	/* USIM initialization completed. UE has finished reading USIM data. */
