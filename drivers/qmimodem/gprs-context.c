@@ -670,7 +670,7 @@ static void wds_set_ip_family_pref_cb(struct qmi_result *result, void *user_data
 
 		/* create IPv6 wds */
 		data->ip_family = QMI_WDS_IP_FAMILY_IPV6;
-		qmi_service_create_shared(data->dev, QMI_SERVICE_WDS, create_wds_cb, gc,
+		qmi_service_create_shared_ex(data->dev, QMI_SERVICE_WDS, 6, create_wds_cb, gc,
 									NULL);
 	} else {
 		qmi_service_register(data->ipv6_wds, QMI_WDS_PKT_STATUS_IND,
@@ -766,7 +766,7 @@ static void get_data_format_cb(struct qmi_result *result, void *user_data)
 
 done:
 	data->ip_family = QMI_WDS_IP_FAMILY_IPV4;
-	qmi_service_create_shared(data->dev, QMI_SERVICE_WDS, create_wds_cb, gc,
+	qmi_service_create_shared_ex(data->dev, QMI_SERVICE_WDS, 4, create_wds_cb, gc,
 									NULL);
 }
 
@@ -790,7 +790,7 @@ static void create_wda_cb(struct qmi_service *service, void *user_data)
 
 error:
 	data->ip_family = QMI_WDS_IP_FAMILY_IPV4;
-	qmi_service_create_shared(data->dev, QMI_SERVICE_WDS, create_wds_cb, gc,
+	qmi_service_create_shared_ex(data->dev, QMI_SERVICE_WDS, 4, create_wds_cb, gc,
 									NULL);
 }
 

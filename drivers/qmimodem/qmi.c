@@ -88,6 +88,7 @@ struct qmi_service {
 	int ref_count;
 	struct qmi_device *device;
 	uint8_t type;
+	uint8_t subtype;
 	uint16_t major;
 	uint16_t minor;
 	uint8_t client_id;
@@ -258,9 +259,11 @@ static gboolean __service_compare_shared(gpointer key, gpointer value,
 							gpointer user_data)
 {
 	struct qmi_service *service = value;
-	uint8_t type = GPOINTER_TO_UINT(user_data);
+	uint16_t ttemp = GPOINTER_TO_UINT(user_data);
+	uint8_t type = ttemp & 0xFF;
+	uint8_t subtype = (ttemp >>8 ) & 0xFF;
 
-	if (service->type == type)
+	if (service->type == type && service->subtype==subtype)
 		return TRUE;
 
 	return FALSE;
@@ -2153,12 +2156,12 @@ static gboolean service_create_shared_reply(gpointer user_data)
 	return FALSE;
 }
 
-bool qmi_service_create_shared(struct qmi_device *device,
-				uint8_t type, qmi_create_func_t func,
+bool qmi_service_create_shared_ex(struct qmi_device *device,
+				uint8_t type, uint8_t subtype, qmi_create_func_t func,
 				void *user_data, qmi_destroy_func_t destroy)
 {
 	struct qmi_service *service;
-	unsigned int type_val = type;
+	unsigned int type_val = type | ((subtype << 8)&0xFF00);
 
 	if (!device || !func)
 		return false;
@@ -2192,11 +2195,18 @@ bool qmi_service_create_shared(struct qmi_device *device,
 	return service_create(device, type, func, user_data, destroy);
 }
 
+bool qmi_service_create_shared(struct qmi_device *device,
+				uint8_t type, qmi_create_func_t func,
+				void *user_data, qmi_destroy_func_t destroy)
+{
+	return qmi_service_create_shared_ex(device, type, 0, func, user_data, destroy);
+}
+
 bool qmi_service_create(struct qmi_device *device,
 				uint8_t type, qmi_create_func_t func,
 				void *user_data, qmi_destroy_func_t destroy)
 {
-	return qmi_service_create_shared(device, type, func,
+	return qmi_service_create_shared_ex(device, type, 0, func,
 						user_data, destroy);
 }
 

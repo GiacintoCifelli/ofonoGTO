@@ -161,6 +161,9 @@ bool qmi_service_create(struct qmi_device *device,
 bool qmi_service_create_shared(struct qmi_device *device,
 				uint8_t type, qmi_create_func_t func,
 				void *user_data, qmi_destroy_func_t destroy);
+bool qmi_service_create_shared_ex(struct qmi_device *device,
+				uint8_t type, uint8_t subtype, qmi_create_func_t func,
+				void *user_data, qmi_destroy_func_t destroy);
 
 struct qmi_service *qmi_service_ref(struct qmi_service *service);
 void qmi_service_unref(struct qmi_service *service);
