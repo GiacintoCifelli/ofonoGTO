@@ -1901,6 +1901,12 @@ static void sim_state_cb(gboolean present, gpointer user_data)
 	data->have_sim = present;
 	ofono_modem_set_powered(modem, TRUE);
 
+	gemalto_command_passthrough_enable(modem);
+	gemalto_hardware_monitor_enable(modem);
+	gemalto_time_enable(modem);
+	gemalto_gnss_enable(modem);
+	gemalto_hardware_control_enable(modem);
+
 	/* Register for specific sim status reports */
 	g_at_chat_register(data->app, "+CIEV:",
 			gemalto_ciev_notify, FALSE, modem, NULL);
@@ -2078,12 +2084,6 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	g_at_chat_send(data->app, "AT^SAIC?", NULL, saic_probe, modem, NULL);
 
 	gemalto_exec_stored_cmd(modem, "enable");
-
-	gemalto_command_passthrough_enable(modem);
-	gemalto_hardware_monitor_enable(modem);
-	gemalto_time_enable(modem);
-	gemalto_gnss_enable(modem);
-	gemalto_hardware_control_enable(modem);
 
 	g_at_chat_send(data->app, "AT^SCFG=\"GPRS/Autoattach\",\"Enabled\"", none_prefix, NULL, NULL, NULL);
 
