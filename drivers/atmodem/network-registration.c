@@ -233,6 +233,8 @@ static void at_creg_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		return;
 	}
 
+	status = 0;
+
 	if ((status == 1 || status == 5) && (tech == -1))
 		tech = nd->tech;
 
@@ -1703,8 +1705,8 @@ static void at_cmer_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		g_at_chat_register(nd->chat, "+CIEV:",
 				ciev_notify, FALSE, netreg, NULL);
 
-	g_at_chat_register(nd->chat, "+CREG:",
-				creg_notify, FALSE, netreg, NULL);
+//	g_at_chat_register(nd->chat, "+CREG:",
+//				creg_notify, FALSE, netreg, NULL);
 
 	ofono_netreg_register(netreg);
 }
