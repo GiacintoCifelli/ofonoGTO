@@ -2224,13 +2224,71 @@ static void gemalto_open_device(const char *device,
 									modem);
 }
 
+static void qmi_enable_cb(void *user_data)
+{
+	struct ofono_modem *modem = user_data;
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	data->qmi = STATE_PRESENT;
+	qmi_device_set_expected_data_format(data->qmid, QMI_DEVICE_EXPECTED_DATA_FORMAT_RAW_IP);
+	gemalto_initialize(modem);
+}
+
+static int qmi_enable(struct ofono_modem *modem)
+{
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	const char *device;
+	int fd;
+	struct serial_struct old, new;
+	int DTR_flag = TIOCM_DTR;
+
+	DBG("modem struct: %p", modem);
+
+	device = gemalto_get_string(modem, "NetworkControl");
+	if (!device)
+		goto end;
+
+	fd = open(device, O_RDWR | O_NONBLOCK | O_CLOEXEC);
+	if (fd < 0)
+		goto end;
+
+	ioctl(fd, TIOCGSERIAL, &old);
+	new = old;
+	new.closing_wait = ASYNC_CLOSING_WAIT_NONE;
+	ioctl(fd, TIOCSSERIAL, &new);
+	ioctl(fd, TIOCMBIS, &DTR_flag);
+
+	data->qmid = qmi_device_new(fd);
+	if (!data->qmid) {
+		close(fd);
+		goto end;
+	}
+
+	qmi_device_set_close_on_unref(data->qmid, true);
+	qmi_device_set_debug(data->qmid, gemalto_qmi_debug, "QMI: ");
+	qmi_device_discover(data->qmid, qmi_enable_cb, modem, NULL);
+	return -EINPROGRESS;
+
+end:
+
+	if (data->init_done) {
+		return 0;
+	}
+
+	return gemalto_initialize(modem);
+}
+
+
 static void gemalto_enable_mdm_cb(gboolean success, struct ofono_modem *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 
 	data->mdm = data->tmp_chat;
 	data->tmp_chat = NULL;
-	gemalto_initialize(modem);
+
+	if ((data->qmi == STATE_PROBE) && ctl && net) {
+		data->init_waiting_time = 10;
+		return qmi_enable(modem);
+	}
 }
 
 static void gemalto_enable_app_cb(gboolean success, struct ofono_modem *modem)
@@ -2491,59 +2549,6 @@ static int mbim_enable(struct ofono_modem *modem)
 other_devices:
 
 	if (md->init_done) {
-		return 0;
-	}
-
-	return gemalto_enable_app(modem);
-}
-
-static void qmi_enable_cb(void *user_data)
-{
-	struct ofono_modem *modem = user_data;
-	struct gemalto_data *data = ofono_modem_get_data(modem);
-	data->qmi = STATE_PRESENT;
-	qmi_device_set_expected_data_format(data->qmid, QMI_DEVICE_EXPECTED_DATA_FORMAT_RAW_IP);
-	gemalto_enable_app(modem); /* qmi done, continue with app interface */
-}
-
-static int qmi_enable(struct ofono_modem *modem)
-{
-	struct gemalto_data *data = ofono_modem_get_data(modem);
-	const char *device;
-	int fd;
-	struct serial_struct old, new;
-	int DTR_flag = TIOCM_DTR;
-
-	DBG("modem struct: %p", modem);
-
-	device = gemalto_get_string(modem, "NetworkControl");
-	if (!device)
-		goto other_devices;
-
-	fd = open(device, O_RDWR | O_NONBLOCK | O_CLOEXEC);
-	if (fd < 0)
-		goto other_devices;
-
-	ioctl(fd, TIOCGSERIAL, &old);
-	new = old;
-	new.closing_wait = ASYNC_CLOSING_WAIT_NONE;
-	ioctl(fd, TIOCSSERIAL, &new);
-	ioctl(fd, TIOCMBIS, &DTR_flag);
-
-	data->qmid = qmi_device_new(fd);
-	if (!data->qmid) {
-		close(fd);
-		goto other_devices;
-	}
-
-	qmi_device_set_close_on_unref(data->qmid, true);
-	qmi_device_set_debug(data->qmid, gemalto_qmi_debug, "QMI: ");
-	qmi_device_discover(data->qmid, qmi_enable_cb, modem, NULL);
-	return -EINPROGRESS;
-
-other_devices:
-
-	if (data->init_done) {
 		return 0;
 	}
 
@@ -2827,11 +2832,6 @@ static int gemalto_enable(struct ofono_modem *modem)
 	if ((data->mbim == STATE_PROBE) && ctl && net) {
 		data->init_waiting_time = 3;
 		return mbim_enable(modem);
-	}
-
-	if ((data->qmi == STATE_PROBE) && ctl && net) {
-		data->init_waiting_time = 10;
-		return qmi_enable(modem);
 	}
 
 	return gemalto_enable_app(modem);
