@@ -2233,7 +2233,7 @@ static void qmi_enable_cb(void *user_data)
 	gemalto_initialize(modem);
 }
 
-static int qmi_enable(struct ofono_modem *modem)
+static void qmi_enable(struct ofono_modem *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	const char *device;
@@ -2245,11 +2245,11 @@ static int qmi_enable(struct ofono_modem *modem)
 
 	device = gemalto_get_string(modem, "NetworkControl");
 	if (!device)
-		goto end;
+		goto next_step;
 
 	fd = open(device, O_RDWR | O_NONBLOCK | O_CLOEXEC);
 	if (fd < 0)
-		goto end;
+		goto next_step;
 
 	ioctl(fd, TIOCGSERIAL, &old);
 	new = old;
@@ -2260,35 +2260,37 @@ static int qmi_enable(struct ofono_modem *modem)
 	data->qmid = qmi_device_new(fd);
 	if (!data->qmid) {
 		close(fd);
-		goto end;
+		goto next_step;
 	}
 
 	qmi_device_set_close_on_unref(data->qmid, true);
 	qmi_device_set_debug(data->qmid, gemalto_qmi_debug, "QMI: ");
 	qmi_device_discover(data->qmid, qmi_enable_cb, modem, NULL);
-	return -EINPROGRESS;
 
-end:
+next_step:
 
 	if (data->init_done) {
-		return 0;
+		return;
 	}
 
-	return gemalto_initialize(modem);
+	gemalto_initialize(modem);
 }
 
 
 static void gemalto_enable_mdm_cb(gboolean success, struct ofono_modem *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
+	const char *ctl = gemalto_get_string(modem, "NetworkControl");
+	const char *net = gemalto_get_string(modem, "NetworkInterface");
 
 	data->mdm = data->tmp_chat;
 	data->tmp_chat = NULL;
 
 	if ((data->qmi == STATE_PROBE) && ctl && net) {
-		data->init_waiting_time = 10;
-		return qmi_enable(modem);
-	}
+		data->init_waiting_time = 3;
+		qmi_enable(modem);
+	} else
+		gemalto_initialize(modem);
 }
 
 static void gemalto_enable_app_cb(gboolean success, struct ofono_modem *modem)
