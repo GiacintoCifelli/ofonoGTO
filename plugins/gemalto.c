@@ -1968,6 +1968,10 @@ static void gemalto_initialize(struct ofono_modem *modem)
 	char *urcdest;
 	guint m = data->model;
 
+	if (data->init_done) {
+		return;
+	}
+
 	DBG("app:%d, mdm:%d, mbim:%d, qmi:%d",
 		data->app!=NULL,
 		data->mdm!=NULL,
@@ -2266,12 +2270,10 @@ static void qmi_enable(struct ofono_modem *modem)
 	qmi_device_set_close_on_unref(data->qmid, true);
 	qmi_device_set_debug(data->qmid, gemalto_qmi_debug, "QMI: ");
 	qmi_device_discover(data->qmid, qmi_enable_cb, modem, NULL);
+	return;
 
 next_step:
 
-	if (data->init_done) {
-		return;
-	}
 
 	gemalto_initialize(modem);
 }
