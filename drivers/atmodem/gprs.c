@@ -677,7 +677,6 @@ static void ublox_ureg_notify(GAtResult *result, gpointer user_data)
 
 static void gemalto_ciev_ceer_notify(GAtResult *result, gpointer user_data)
 {
-	struct ofono_gprs *gprs = user_data;
 	const char *report;
 	GAtResultIter iter;
 
@@ -693,13 +692,6 @@ static void gemalto_ciev_ceer_notify(GAtResult *result, gpointer user_data)
 		return;
 	if (!g_at_result_iter_next_string(&iter, &report))
 		return;
-
-	/* TODO: Handle more of these? */
-
-	if (g_str_equal(report, "Regular deactivation")) {
-		ofono_gprs_detached_notify(gprs);
-		return;
-	}
 }
 
 static void gemalto_ciev_bearer_notify(GAtResult *result, gpointer user_data)
