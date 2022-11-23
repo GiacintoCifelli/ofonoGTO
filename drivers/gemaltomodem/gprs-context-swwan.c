@@ -233,7 +233,7 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 		goto deactivate;
 	}
 
-	 if (g_str_has_prefix(event, "PDN DEACT")) {
+	if (g_str_has_prefix(event, "PDN DEACT")) {
 		sscanf(event, "%*s %*s %u", &cid);
 		goto deactivate;
 	}
