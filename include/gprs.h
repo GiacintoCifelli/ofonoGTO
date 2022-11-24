@@ -31,20 +31,17 @@ extern "C" {
 struct ofono_gprs;
 struct ofono_gprs_context;
 
-typedef void (*ofono_gprs_status_cb_t)(const struct ofono_error *error,
-						int status, void *data);
-
+typedef void (*ofono_gprs_status_cb_t)(const struct ofono_error *error, int status, void *data);
 typedef void (*ofono_gprs_cb_t)(const struct ofono_error *error, void *data);
+typedef void (*ofono_gprs_ipv4_cb_t)(const struct ofono_error *error, unsigned int ipv4, void *data);
 
 struct ofono_gprs_driver {
 	const char *name;
-	int (*probe)(struct ofono_gprs *gprs, unsigned int vendor,
-			void *data);
+	int (*probe)(struct ofono_gprs *gprs, unsigned int vendor, void *data);
 	void (*remove)(struct ofono_gprs *gprs);
-	void (*set_attached)(struct ofono_gprs *gprs, int attached,
-				ofono_gprs_cb_t cb, void *data);
-	void (*attached_status)(struct ofono_gprs *gprs,
-					ofono_gprs_status_cb_t cb, void *data);
+	void (*set_attached)(struct ofono_gprs *gprs, int attached, ofono_gprs_cb_t cb, void *data);
+	void (*attached_status)(struct ofono_gprs *gprs, ofono_gprs_status_cb_t cb, void *data);
+	void (*get_ipv4)(struct ofono_gprs *gprs, ofono_gprs_ipv4_cb_t cb, void *data);
 };
 
 enum gprs_suspend_cause {

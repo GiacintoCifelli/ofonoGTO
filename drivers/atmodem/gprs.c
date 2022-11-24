@@ -48,6 +48,7 @@ static const char *cereg_prefix[] = { "+CEREG:", NULL };
 static const char *c5greg_prefix[] = { "+C5GREG:", NULL };
 static const char *cgdcont_prefix[] = { "+CGDCONT:", NULL };
 static const char *cops_prefix[] = { "+COPS:", NULL };
+static const char *cgpaddr_prefix[] = { "+CGPADDR:", NULL };
 static const char *none_prefix[] = { NULL };
 
 struct gprs_data {
@@ -1065,12 +1066,63 @@ static void at_gprs_remove(struct ofono_gprs *gprs)
 	g_free(gd);
 }
 
+static void at_cgpaddr_cb(gboolean ok, GAtResult *result, gpointer user_data) {
+	struct cb_data *cbd = user_data;
+	ofono_gprs_ipv4_cb_t cb = cbd->cb;
+	struct ofono_error error;
+	unsigned int ipv4 = -1;
+	GAtResultIter iter;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	if (!ok)
+		goto end;
+
+	g_at_result_iter_init(&iter, result);
+
+	while (g_at_result_iter_next(&iter, "+CGPADDR:")) {
+		const char *str = NULL;
+		unsigned int a, b, c, d;
+
+		g_at_result_iter_skip_next(&iter); /* ignore CID */
+		if(!g_at_result_iter_next_string(&iter, &str)) /* empty CID */
+			continue;
+
+		if(sscanf(str,"%u.%u.%u.%u", &a,&b,&c,&d)!=4)
+			continue;
+
+		ipv4=a<<24|b<<16|c<<8|d;
+		DBG("%s, %u", str, ipv4);
+		break; /* found an IPv4, stopping*/
+	}
+end:
+	cb(&error, ipv4, cbd->data);
+}
+
+static void at_gprs_get_ipv4(struct ofono_gprs *gprs,
+					ofono_gprs_ipv4_cb_t cb,
+					void *data)
+{
+	struct gprs_data *gd = ofono_gprs_get_data(gprs);
+	struct cb_data *cbd = cb_data_new(cb, data);
+	cbd->user = gd;
+
+	if (g_at_chat_send(gd->chat, "AT+CGPIAF=1;+CGPADDR", cgpaddr_prefix,
+				at_cgpaddr_cb, cbd, g_free) == 0) {
+		g_free(cbd);
+		CALLBACK_WITH_FAILURE(cb, -1, data);
+		return;
+	}
+
+}
+
 static const struct ofono_gprs_driver driver = {
 	.name			= "atmodem",
 	.probe			= at_gprs_probe,
 	.remove			= at_gprs_remove,
 	.set_attached		= at_gprs_set_attached,
 	.attached_status	= at_gprs_registration_status,
+	.get_ipv4		= at_gprs_get_ipv4,
 };
 
 void at_gprs_init(void)

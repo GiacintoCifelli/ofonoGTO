@@ -62,6 +62,8 @@
 struct ofono_gprs {
 	GSList *contexts;
 	ofono_bool_t attached;
+	bool detaching;
+	unsigned int oldipv4;
 	ofono_bool_t driver_attached;
 	ofono_bool_t roaming_allowed;
 	ofono_bool_t powered;
@@ -843,6 +845,13 @@ static DBusMessage *pri_get_properties(DBusConnection *conn,
 	return reply;
 }
 
+static void get_oldipv4_cb(const struct ofono_error *error, unsigned int ipv4, void *data)
+{
+	struct ofono_gprs *gprs = data;
+	DBG("%u", ipv4);
+	gprs->oldipv4 = ipv4;
+}
+
 static void pri_activate_callback(const struct ofono_error *error, void *data)
 {
 	struct pri_context *ctx = data;
@@ -880,6 +889,9 @@ static void pri_activate_callback(const struct ofono_error *error, void *data)
 					ctx->path,
 					OFONO_CONNECTION_CONTEXT_INTERFACE,
 					"Active", DBUS_TYPE_BOOLEAN, &value);
+
+	if (ctx->gprs->driver->get_ipv4)
+		ctx->gprs->driver->get_ipv4(ctx->gprs, get_oldipv4_cb, ctx->gprs);
 }
 
 static void pri_deactivate_callback(const struct ofono_error *error, void *data)
@@ -909,6 +921,7 @@ static void pri_deactivate_callback(const struct ofono_error *error, void *data)
 		ctx->gprs->flags &= ~GPRS_FLAG_ATTACHED_UPDATE;
 		gprs_attached_update(ctx->gprs);
 	}
+	ctx->gprs->oldipv4 = -1;
 }
 
 static void gprs_set_attached_property(struct ofono_gprs *gprs,
@@ -1592,6 +1605,36 @@ static void release_active_contexts(struct ofono_gprs *gprs)
 	}
 }
 
+static void get_ipv4_cb(const struct ofono_error *error, unsigned int ipv4, void *data)
+{
+	struct ofono_gprs *gprs = data;
+	DBG("oldipv4=%08x, newipv4=%08x", gprs->oldipv4, ipv4);
+	if(ipv4==gprs->oldipv4)
+		return;
+	gprs->oldipv4=ipv4; /* update stored ipv4 */
+	release_active_contexts(gprs);
+	gprs->bearer = -1;
+	gprs_set_attached_property(gprs, FALSE);
+	gprs->detaching = FALSE; /* reset flag */
+}
+
+static int gprs_detach_complete(void *g) {
+	struct ofono_gprs *gprs = g;
+	DBG("gprs->detaching = %d;", gprs->detaching);
+	if(!gprs->detaching) {
+		/* context deactivated and immediately reactivated: possible false alarm */
+		if (gprs->driver->get_ipv4)
+			gprs->driver->get_ipv4(gprs, get_ipv4_cb, gprs);
+		return FALSE;
+	}
+	DBG("actual detach");
+	release_active_contexts(gprs);
+	gprs->bearer = -1;
+	gprs_set_attached_property(gprs, FALSE);
+	gprs->detaching = FALSE; /* reset flag */
+	return FALSE;
+}
+
 static void gprs_attached_update(struct ofono_gprs *gprs)
 {
 	ofono_bool_t attached;
@@ -1600,19 +1643,26 @@ static void gprs_attached_update(struct ofono_gprs *gprs)
 		(gprs->status == NETWORK_REGISTRATION_STATUS_REGISTERED ||
 			gprs->status == NETWORK_REGISTRATION_STATUS_ROAMING);
 
+	DBG("attached: %d, gprs->attached: %d", attached, gprs->attached);
+
+	if(attached && gprs->detaching) {
+		DBG("gprs->detaching = FALSE;");
+		gprs->detaching = FALSE;
+		return;
+	}
+
 	if (attached == gprs->attached)
 		return;
 
-	/*
-	 * If an active context is found, a PPP session might be still active
-	 * at driver level. "Attached" = TRUE property can't be signalled to
-	 * the applications registered on GPRS properties.
-	 * Active contexts have to be release at driver level.
-	 */
-	if (attached == FALSE) {
-		release_active_contexts(gprs);
-		gprs->bearer = -1;
-	} else if (have_active_contexts(gprs) == TRUE) {
+	if(!attached) {
+		DBG("gprs->detaching = TRUE;");
+		/* wait before taking actions: it might be a false alarm */
+		gprs->detaching = TRUE;
+		g_timeout_add_seconds(2, gprs_detach_complete, gprs);
+		return;
+	}
+
+	if (have_active_contexts(gprs) == TRUE) {
 		/*
 		 * Some times the context activates after a detach event and
 		 * right before an attach. We close it to avoid unexpected open
