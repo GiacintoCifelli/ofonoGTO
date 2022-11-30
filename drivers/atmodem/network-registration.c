@@ -1971,13 +1971,13 @@ static gboolean gemalto_csq_query(gpointer user_data)
 	case AT_COMMAND_SUPPORT_UNKNOWN:
 		/* Default it to AT_COMMAND_NOT_SUPPORTED and test AT+CESQ */
 		nd->supports_cesq = AT_COMMAND_NOT_SUPPORTED;
-		g_at_chat_send(nd->chat, "AT+CESQ", none_prefix, NULL, NULL, NULL);
+		g_at_chat_send(nd->chat, "AT+CCLK?;+CESQ", none_prefix, NULL, NULL, NULL);
 		break;
 	case AT_COMMAND_SUPPORTED:
-		g_at_chat_send(nd->chat, "AT+CESQ", none_prefix, NULL, NULL, NULL);
+		g_at_chat_send(nd->chat, "AT+CCLK?;+CESQ", none_prefix, NULL, NULL, NULL);
 		break;
 	case AT_COMMAND_NOT_SUPPORTED:
-		g_at_chat_send(nd->chat, "AT+CSQ", none_prefix, NULL, NULL, NULL);
+		g_at_chat_send(nd->chat, "AT+CCLK?;+CSQ", none_prefix, NULL, NULL, NULL);
 		break;
 	}
 
