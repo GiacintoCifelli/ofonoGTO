@@ -35,6 +35,19 @@ enum access_technology {
 	ACCESS_TECHNOLOGY_EUTRAN =		7,
 };
 
+/* 27.007 Section 7.29 */
+enum packet_bearer {
+	PACKET_BEARER_NONE =		0,
+	PACKET_BEARER_GPRS =		1,
+	PACKET_BEARER_EGPRS =		2,
+	PACKET_BEARER_UMTS =		3,
+	PACKET_BEARER_HSUPA =		4,
+	PACKET_BEARER_HSDPA =		5,
+	PACKET_BEARER_HSUPA_HSDPA =	6,
+	PACKET_BEARER_EPS =		7,
+};
+
+
 /* 27.007 Section 7.2 <stat> */
 enum network_registration_status {
 	NETWORK_REGISTRATION_STATUS_NOT_REGISTERED =		0,
@@ -60,18 +73,6 @@ enum clip_validity {
 	CLIP_VALIDITY_VALID =		0,
 	CLIP_VALIDITY_WITHHELD =	1,
 	CLIP_VALIDITY_NOT_AVAILABLE =	2,
-};
-
-/* 27.007 Section 7.29 */
-enum packet_bearer {
-	PACKET_BEARER_NONE =		0,
-	PACKET_BEARER_GPRS =		1,
-	PACKET_BEARER_EGPRS =		2,
-	PACKET_BEARER_UMTS =		3,
-	PACKET_BEARER_HSUPA =		4,
-	PACKET_BEARER_HSDPA =		5,
-	PACKET_BEARER_HSUPA_HSDPA =	6,
-	PACKET_BEARER_EPS =		7,
 };
 
 /* 27.007 Section 7.30 */

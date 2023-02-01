@@ -73,6 +73,9 @@ struct netreg_info {
 	const char *ind;
 	int status;
 	int bearer;
+	int lac;
+	int ci;
+	int tech;
 };
 
 static void at_cgatt_cb(gboolean ok, GAtResult *result, gpointer user_data)
@@ -360,6 +363,58 @@ error:
 	return tech;
 }
 
+static int gemalto_get_bearer_from_tech(int tech)
+{
+	int bearer;
+	/* Go from Gemalto representation to oFono representation */
+	switch (tech) {
+	case 0: /* GPRS/EGPRS not available */
+		/* Same as "no bearer"? */
+		bearer = 0;
+		break;
+	case 1: /* GPRS available, ignore this one */
+		bearer = 0;
+		break;
+	case 2: /* GPRS attached */
+		bearer = 1;
+		break;
+	case 3: /* EGPRS available, ignore this one */
+		bearer = 0;
+		break;
+	case 4: /* EGPRS attached */
+		bearer = 2;
+		break;
+	case 5: /* UMTS available, ignore this one */
+		bearer = 0;
+		break;
+	case 6: /* UMTS attached */
+		bearer = 3;
+		break;
+	case 7: /* HSDPA available, ignore this one */
+		bearer = 0;
+		break;
+	case 8: /* HSDPA attached */
+		bearer = 5;
+		break;
+	case 9: /* HSDPA/HSUPA available, ignore this one */
+		bearer = 0;
+		break;
+	case 10: /* HSDPA/HSUPA attached */
+		bearer = 6;
+		break;
+	/* TODO: Limit these cases to ALS3? */
+	case 16: /* E-UTRA available, ignore this one */
+		bearer = 0;
+		break;
+	case 17: /* E-UTRA attached */
+		bearer = 7;
+		break;
+	default: /* Assume that non-parsable values mean "no bearer" */
+		bearer = 0;
+		break;
+	}
+	return bearer;
+}
 
 static void netreg_notify_cb(gboolean ok, GAtResult *result, gpointer user_data)
 {
@@ -377,31 +432,29 @@ static void netreg_notify_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	 * matching enum access_technology in common.h up to 7.
 	 */
 	if (g_str_equal(nri->ind,"CGREG") && (cops_tech < 7 || cops_tech == 8))
-		ofono_gprs_status_notify(nri->gprs, nri->status);
+		ofono_gprs_status_notify_ex(nri->gprs, nri->status, nri->lac, nri->ci, nri->tech);
 	else if (g_str_equal(nri->ind,"CEREG") && (cops_tech == 7 ||
 					cops_tech == 9 || cops_tech == 12))
-		ofono_gprs_status_notify(nri->gprs, nri->status);
+		ofono_gprs_status_notify_ex(nri->gprs, nri->status, nri->lac, nri->ci, nri->tech);
 	else if (g_str_equal(nri->ind,"C5GREG") && (cops_tech == 10 ||
 					cops_tech == 11 || cops_tech == 13))
-		ofono_gprs_status_notify(nri->gprs, nri->status);
+		ofono_gprs_status_notify_ex(nri->gprs, nri->status, nri->lac, nri->ci, nri->tech);
 	/* all other cases ignored: indicator not for current AcT */
 }
 
-static void netreg_notify(struct ofono_gprs *gprs, const char* ind, int status, int bearer)
+static void netreg_notify(struct ofono_gprs *gprs, const char* ind, int status, int lac, int ci, int tech)
 {
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
 	struct netreg_info *nri;
+	int bearer = gemalto_get_bearer_from_tech(tech);
 
 	if (status == NETWORK_REGISTRATION_STATUS_DENIED ||
 			status == NETWORK_REGISTRATION_STATUS_REGISTERED ||
 			status == NETWORK_REGISTRATION_STATUS_ROAMING ||
 			gd->nb_inds == 1) {
 		/* accept this status and process */
-		ofono_gprs_status_notify(gprs, status);
-
-		if (bearer != -1)
-			ofono_gprs_bearer_notify(gprs, bearer);
-
+		ofono_gprs_status_notify_ex(gprs, status, lac, ci, tech);
+		ofono_gprs_bearer_notify(gprs, bearer);
 		return;
 	}
 
@@ -415,7 +468,9 @@ static void netreg_notify(struct ofono_gprs *gprs, const char* ind, int status, 
 	nri->gd = gd;
 	nri->ind = ind;
 	nri->status = status;
-	nri->bearer = bearer;
+	nri->tech = tech;
+	nri->lac = lac;
+	nri->ci = ci;
 	g_at_chat_send(gd->chat, "AT+COPS?", cops_prefix, netreg_notify_cb, nri, g_free);
 }
 
@@ -423,10 +478,10 @@ static void cgreg_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_gprs *gprs = user_data;
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
-	int status, bearer;
+	int status, tech, lac, ci;
 
 	if (at_util_parse_reg_unsolicited(result, "+CGREG:", &status,
-				NULL, NULL, &bearer, gd->vendor) == FALSE)
+				&lac, &ci, &tech, gd->vendor) == FALSE) // add lac, ci
 		return;
 
 	/*
@@ -451,33 +506,33 @@ static void cgreg_notify(GAtResult *result, gpointer user_data)
 		gd->telit_try_reattach = FALSE;
 	}
 
-	netreg_notify(gprs, "CGREG", status, bearer);
+	netreg_notify(gprs, "CGREG", status, lac, ci, tech);
 }
 
 static void cereg_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_gprs *gprs = user_data;
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
-	int status, bearer;
+	int status, lac, ci, tech;
 
 	if (at_util_parse_reg_unsolicited(result, "+CEREG:", &status,
-				NULL, NULL, &bearer, gd->vendor) == FALSE)
+				&lac, &ci, &tech, gd->vendor) == FALSE)
 		return;
 
-	netreg_notify(gprs, "CEREG", status, bearer);
+	netreg_notify(gprs, "CEREG", status, lac, ci, tech);
 }
 
 static void c5greg_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_gprs *gprs = user_data;
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
-	int status, bearer;
+	int status, lac, ci, tech;
 
 	if (at_util_parse_reg_unsolicited(result, "+C5GREG:", &status,
-				NULL, NULL, &bearer, gd->vendor) == FALSE)
+				&lac, &ci, &tech, gd->vendor) == FALSE)
 		return;
 
-	netreg_notify(gprs, "C5GREG", status, bearer);
+	netreg_notify(gprs, "C5GREG", status, lac, ci, tech);
 }
 
 static void cgev_notify(GAtResult *result, gpointer user_data)
@@ -698,58 +753,17 @@ static void gemalto_ciev_ceer_notify(GAtResult *result, gpointer user_data)
 static void gemalto_ciev_bearer_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_gprs *gprs = user_data;
-	int bearer;
+	int tech, bearer;
 	GAtResultIter iter;
 
 	g_at_result_iter_init(&iter, result);
 
 	if (!g_at_result_iter_next(&iter, "+CIEV: psinfo,"))
 		return;
-	if (!g_at_result_iter_next_number(&iter, &bearer))
+	if (!g_at_result_iter_next_number(&iter, &tech))
 		return;
 
-	/* Go from Gemalto representation to oFono representation */
-	switch (bearer) {
-	case 0: /* GPRS/EGPRS not available */
-		/* Same as "no bearer"? */
-		bearer = 0;
-		break;
-	case 1: /* GPRS available, ignore this one */
-		return;
-	case 2: /* GPRS attached */
-		bearer = 1;
-		break;
-	case 3: /* EGPRS available, ignore this one */
-		return;
-	case 4: /* EGPRS attached */
-		bearer = 2;
-		break;
-	case 5: /* UMTS available, ignore this one */
-		return;
-	case 6: /* UMTS attached */
-		bearer = 3;
-		break;
-	case 7: /* HSDPA available, ignore this one */
-		return;
-	case 8: /* HSDPA attached */
-		bearer = 5;
-		break;
-	case 9: /* HSDPA/HSUPA available, ignore this one */
-		return;
-	case 10: /* HSDPA/HSUPA attached */
-		bearer = 6;
-		break;
-	/* TODO: Limit these cases to ALS3? */
-	case 16: /* E-UTRA available, ignore this one */
-		return;
-	case 17: /* E-UTRA attached */
-		bearer = 7;
-		break;
-	default: /* Assume that non-parsable values mean "no bearer" */
-		bearer = 0;
-		break;
-	}
-
+	bearer = gemalto_get_bearer_from_tech(tech);
 	ofono_gprs_bearer_notify(gprs, bearer);
 }
 

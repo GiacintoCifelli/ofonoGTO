@@ -2591,6 +2591,16 @@ void ofono_gprs_detached_notify(struct ofono_gprs *gprs)
 	 */
 }
 
+void ofono_gprs_status_notify_ex(struct ofono_gprs *gprs, int status, int lac, int ci, int tech)
+{
+	struct ofono_modem *modem = __ofono_atom_get_modem(gprs->atom);
+	struct ofono_netreg *netreg = __ofono_atom_find(OFONO_ATOM_TYPE_NETREG, modem);
+
+	/* notify netreg */
+	ofono_netreg_status_notify(netreg, status, 0, 0, 7); // todo: replace hardcoded values
+	ofono_gprs_status_notify(gprs, status);
+}
+
 void ofono_gprs_status_notify(struct ofono_gprs *gprs, int status)
 {
 	DBG("%s status %s (%d)", __ofono_atom_get_path(gprs->atom),

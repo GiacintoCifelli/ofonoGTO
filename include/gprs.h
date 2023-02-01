@@ -53,6 +53,7 @@ enum gprs_suspend_cause {
 };
 
 void ofono_gprs_status_notify(struct ofono_gprs *gprs, int status);
+void ofono_gprs_status_notify_ex(struct ofono_gprs *gprs, int status, int lac, int ci, int tech);
 void ofono_gprs_detached_notify(struct ofono_gprs *gprs);
 void ofono_gprs_suspend_notify(struct ofono_gprs *gprs, int cause);
 void ofono_gprs_resume_notify(struct ofono_gprs *gprs);
