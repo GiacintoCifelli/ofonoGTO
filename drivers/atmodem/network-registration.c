@@ -240,6 +240,9 @@ static void at_creg_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	if (status > 5 && tech == -1)
 		tech = ACCESS_TECHNOLOGY_EUTRAN;
 
+	if(status!=1 && status!=5)
+		status=2; /* searching, do not report failures */
+
 	cb(&error, status, lac, ci, tech, cbd->data);
 }
 
