@@ -825,6 +825,16 @@ static inline gboolean append_cnmi_element(char *buf, int *len, int cap,
 	return TRUE;
 }
 
+static inline gboolean append_empty_cnmi_element(char *buf, int *len, gboolean last)
+{
+	if (last)
+		buf[*len + 1] = '\0';
+	else
+		buf[*len + 1] = ',';
+	*len += 1;
+	return TRUE;
+}
+
 static gboolean build_cnmi_string(char *buf, int *cnmi_opts,
 					struct sms_data *data)
 {
@@ -860,17 +870,17 @@ static gboolean build_cnmi_string(char *buf, int *cnmi_opts,
 
 	switch (data->vendor) {
 	case OFONO_VENDOR_GEMALTO:
-		mode = "0";
+		if (!append_empty_cnmi_element(buf, &len, FALSE))
+			return FALSE;
 		break;
 	default:
 		/* Sounds like 2 is the sanest mode */
 		mode = "20";
+		/* Always deliver CB via +CBM, otherwise don't deliver at all */
+		if (!append_cnmi_element(buf, &len, cnmi_opts[2], mode, FALSE))
+			return FALSE;
 		break;
 	}
-
-	/* Always deliver CB via +CBM, otherwise don't deliver at all */
-	if (!append_cnmi_element(buf, &len, cnmi_opts[2], mode, FALSE))
-		return FALSE;
 
 	/*
 	 * Some manufacturers seem to have trouble with delivery via +CDS.
