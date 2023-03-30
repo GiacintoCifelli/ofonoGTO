@@ -544,9 +544,9 @@ static void cpin_check_cb(gboolean ok, GAtResult *result, gpointer userdata)
 
 	switch (error.error) {
 	case 10:
-	case 13:
 		goto done;
 
+	case 13:
 	case 14:
 		goto tryagain;
 
