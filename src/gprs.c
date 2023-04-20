@@ -72,6 +72,7 @@ struct ofono_gprs {
 	int flags;
 	int bearer;
 	guint suspend_timeout;
+	guint detach_timeout;
 	struct idmap *pid_map;
 	unsigned int last_context_id;
 	struct idmap *cid_map;
@@ -1620,6 +1621,7 @@ static void get_ipv4_cb(const struct ofono_error *error, unsigned int ipv4, void
 
 static int gprs_detach_complete(void *g) {
 	struct ofono_gprs *gprs = g;
+	gprs->detach_timeout = 0;
 	DBG("gprs->detaching = %d;", gprs->detaching);
 	if(!gprs->detaching) {
 		/* context deactivated and immediately reactivated: possible false alarm */
@@ -1659,7 +1661,9 @@ static void gprs_attached_update(struct ofono_gprs *gprs)
 			DBG("gprs->detaching = TRUE;");
 			/* wait before taking actions if there are active contexts: it might be a false alarm */
 			gprs->detaching = TRUE;
-			g_timeout_add_seconds(2, gprs_detach_complete, gprs);
+			if (gprs->detach_timeout)
+				g_source_remove(gprs->detach_timeout);
+			gprs->detach_timeout = g_timeout_add_seconds(2, gprs_detach_complete, gprs);
 			return;
 		} else
 			gprs_detach_complete(gprs);
@@ -3109,6 +3113,9 @@ static void gprs_remove(struct ofono_atom *atom)
 
 	if (gprs->suspend_timeout)
 		g_source_remove(gprs->suspend_timeout);
+
+	if (gprs->detach_timeout)
+		g_source_remove(gprs->detach_timeout);
 
 	if (gprs->pid_map) {
 		idmap_free(gprs->pid_map);
