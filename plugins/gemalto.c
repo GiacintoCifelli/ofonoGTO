@@ -1049,6 +1049,19 @@ static DBusMessage *command_passthrough_send_break(DBusConnection *conn,
 	return dbus_message_new_method_return(msg);
 }
 
+static DBusMessage *command_passthrough_send_atbreak(DBusConnection *conn,
+							DBusMessage *msg,
+							void *user_data)
+{
+	struct ofono_modem *modem = user_data;
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	GIOChannel *channel = g_at_chat_get_channel(data->app);
+
+	g_io_channel_write_chars(channel, "AT\r", 3, NULL, NULL);
+
+	return dbus_message_new_method_return(msg);
+}
+
 static const GDBusMethodTable command_passthrough_methods[] = {
 	{ GDBUS_ASYNC_METHOD("Simple",
 		GDBUS_ARGS({ "command", "s" }),
@@ -1063,6 +1076,10 @@ static const GDBusMethodTable command_passthrough_methods[] = {
 		NULL,
 		NULL,
 		command_passthrough_send_break) },
+	{ GDBUS_ASYNC_METHOD("SendAtBreak",
+		NULL,
+		NULL,
+		command_passthrough_send_atbreak) },
 	{}
 };
 
