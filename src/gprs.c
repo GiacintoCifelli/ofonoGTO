@@ -1655,11 +1655,14 @@ static void gprs_attached_update(struct ofono_gprs *gprs)
 		return;
 
 	if(!attached) {
-		DBG("gprs->detaching = TRUE;");
-		/* wait before taking actions: it might be a false alarm */
-		gprs->detaching = TRUE;
-		g_timeout_add_seconds(2, gprs_detach_complete, gprs);
-		return;
+		if(have_active_contexts(gprs) == TRUE) {
+			DBG("gprs->detaching = TRUE;");
+			/* wait before taking actions if there are active contexts: it might be a false alarm */
+			gprs->detaching = TRUE;
+			g_timeout_add_seconds(2, gprs_detach_complete, gprs);
+			return;
+		} else
+			gprs_detach_complete(gprs);
 	}
 
 	if (have_active_contexts(gprs) == TRUE) {
