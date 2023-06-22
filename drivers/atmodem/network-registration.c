@@ -282,6 +282,20 @@ static void option_tech_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		nd->tech = -1;
 }
 
+static void gemalto_query_tech_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	struct ofono_netreg *netreg = cbd->data;
+	struct netreg_data *nd = ofono_netreg_get_data(netreg);
+
+	if (ok)
+		nd->tech = gemalto_parse_tech(result);
+	else
+		nd->tech = -1;
+	DBG("parsing result tech=%d",nd->tech);
+}
+
+
 static void at_registration_status(struct ofono_netreg *netreg,
 					ofono_netreg_status_cb_t cb,
 					void *data)
@@ -325,6 +339,11 @@ static void at_registration_status(struct ofono_netreg *netreg,
 					zte_tech_cb, cbd, NULL) == 0)
 			nd->tech = -1;
 		break;
+	case OFONO_VENDOR_GEMALTO:
+		if (g_at_chat_send(nd->chat, "AT^SMONI", smoni_prefix, gemalto_query_tech_set_cb, cbd, NULL) > 0)
+			nd->tech = -1;
+		break;
+
 	case OFONO_VENDOR_OPTION_HSO:
 		/*
 		 * Send AT_OCTI?;_OUWCTI? to find out the current tech,
