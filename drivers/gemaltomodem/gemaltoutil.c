@@ -42,10 +42,11 @@ static unsigned int gemalto_get_cid_from_provider(struct ofono_modem *modem)
 	unsigned int cid = 1;
 	const char *provider = ofono_modem_get_string(modem, "Provider");
 	if (provider) {
-		if (g_strcmp0 (provider, "2") == 0 || g_strcmp0 (provider, "vzwdcus") == 0)
+		if (g_strcmp0 (provider, "2") == 0 || g_strcmp0 (provider, "vzwdcus") == 0 || g_strcmp0 (provider, "CDMAless-Verizon") == 0)
 			cid = 3;
 		else if (g_strcmp0 (provider, "tmode") == 0)
 			cid = 2;
+		ofono_info("Provider: %s",provider);
 	}
 	return cid;
 }

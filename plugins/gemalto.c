@@ -3068,7 +3068,18 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 	} else if (data->qmi == STATE_PRESENT) {
 		gprs = ofono_gprs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem",
 								data->app);
-		ofono_gprs_set_cid_range(gprs, 1, 1);
+
+		if (g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "2") == 0 || 
+		    g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "vzwdcus") == 0 || 
+		    g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "CDMAless-Verizon") == 0)
+		{    
+			ofono_gprs_set_cid_range(gprs, 3, 3);
+			DBG("CID range: 3, 3");
+		} else {         
+			ofono_gprs_set_cid_range(gprs, 1, 1);
+			DBG("CID range: 1, 1");
+		}         
+
 		gc = ofono_gprs_context_create(modem, 0, "qmimodem",
 								data->qmid);
 	} else if (data->gprs_opt == USE_SWWAN || data->gprs_opt == USE_CTX17 ||
@@ -3080,7 +3091,8 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 		if (data->gprs_opt == USE_CTX17)
 			ofono_gprs_set_cid_range(gprs, 17, 17);
 		else if (data->gprs_opt == USE_CTX3 ||
-		         (data->model == 0x61 && !g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "2")))
+		         (data->model == 0x61 &&
+		         (!g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "2") || !g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "CDMAless-Verizon"))))
 			ofono_gprs_set_cid_range(gprs, 3, 3);
 		else if (data->model == 0x5b)
 			/* limitation: same APN as for attach */
