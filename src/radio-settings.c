@@ -379,12 +379,6 @@ static void radio_set_rat_mode(struct ofono_radio_settings *rs,
 						OFONO_RADIO_SETTINGS_INTERFACE,
 						"TechnologyPreference",
 						DBUS_TYPE_STRING, &str_mode);
-
-	if (rs->settings) {
-		g_key_file_set_integer(rs->settings, SETTINGS_GROUP,
-				"TechnologyPreference", rs->mode);
-		storage_sync(rs->imsi, SETTINGS_STORE, rs->settings);
-	}
 }
 
 static void radio_mode_set_callback(const struct ofono_error *error, void *data)
@@ -407,6 +401,12 @@ static void radio_mode_set_callback(const struct ofono_error *error, void *data)
 	__ofono_dbus_pending_reply(&rs->pending, reply);
 
 	radio_set_rat_mode(rs, rs->pending_mode);
+
+	if (rs->settings) {
+		g_key_file_set_integer(rs->settings, SETTINGS_GROUP,
+				"TechnologyPreference", rs->mode);
+		storage_sync(rs->imsi, SETTINGS_STORE, rs->settings);
+	}
 }
 
 static void radio_send_properties_reply(struct ofono_radio_settings *rs)
