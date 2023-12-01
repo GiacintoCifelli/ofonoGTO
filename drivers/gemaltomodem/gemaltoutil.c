@@ -37,6 +37,19 @@
 #include "gemaltomodem.h"
 #include <ofono/gemalto.h>
 
+static unsigned int gemalto_get_cid_from_provider(struct ofono_modem *modem)
+{
+	unsigned int cid = 1;
+	const char *provider = ofono_modem_get_string(modem, "Provider");
+	if (provider) {
+		if (g_strcmp0 (provider, "2") == 0 || g_strcmp0 (provider, "vzwdcus") == 0)
+			cid = 3;
+		else if (g_strcmp0 (provider, "tmode") == 0)
+			cid = 2;
+	}
+	return cid;
+}
+
 char *gemalto_get_auth_command(struct ofono_modem *modem, int cid,
 				enum ofono_gprs_auth_method auth_method,
 				const char *username, const char *password)
@@ -51,9 +64,8 @@ char *gemalto_get_auth_command(struct ofono_modem *modem, int cid,
 	if (!*username || !*password)
 		auth_method = OFONO_GPRS_AUTH_METHOD_NONE;
 
-	/* for now. Later to consider modules where the LTE attach CID=3 */
 	if (cid==0)
-		cid=1;
+		cid = gemalto_get_cid_from_provider(modem);
 
 	if (gemalto_auth & GEMALTO_AUTH_USE_SGAUTH)
 		len = snprintf(buf, buflen, "AT^SGAUTH");
@@ -95,9 +107,8 @@ char *gemalto_get_cgdcont_command(struct ofono_modem *modem, guint cid,
 	 * This is an ofono_modem_get_integer property
 	 */
 
-	/* for now. Later to consider modules where the LTE attach CID=3 */
 	if (cid==0)
-		cid=1;
+		cid = gemalto_get_cid_from_provider(modem);
 
 	return at_util_get_cgdcont_command(cid, proto, apn);
 }

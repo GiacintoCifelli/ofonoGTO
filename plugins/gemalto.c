@@ -2927,12 +2927,41 @@ static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
 	g_free(cbd);
 }
 
+static void gemalto_retrieve_provider(gboolean success, GAtResult *result, gpointer user_data)
+{
+	GAtResultIter iter;
+	const char *provider_val;
+	struct ofono_modem *modem = user_data;
+
+	if (success) {
+		g_at_result_iter_init(&iter, result);
+		if (!g_at_result_iter_next(&iter, "^SCFG: \"MEopMode/Prov/Cfg\",")) {
+			ofono_error("Invalid response when querying provider");
+			return;
+		}
+
+		if (!g_at_result_iter_next_string(&iter, &provider_val)) {
+			ofono_error("Invalid response when querying provider");
+		} else {
+			DBG("Provider: '%s'", provider_val);
+			ofono_modem_set_string(modem, "Provider", provider_val);
+		}
+	} else {
+		DBG("Error when retrieving Provider");
+	}
+}
+
 static void gemalto_pre_sim(struct ofono_modem *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 
 	DBG("%p", modem);
 	gemalto_exec_stored_cmd(modem, "pre_sim");
+
+	/* Retrieve Provider used by LTE and for the cid range */
+	g_at_chat_send(data->app, "AT^SCFG=\"MEopMode/Prov/Cfg\"", scfg_prefix,
+	               gemalto_retrieve_provider, modem, NULL);
+
 	ofono_location_reporting_create(modem, 0, "gemaltomodem", data->app);
 	data->sim = ofono_sim_create(modem, OFONO_VENDOR_GEMALTO,
 		"atmodem", data->app);
@@ -3050,7 +3079,8 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 								data->app);
 		if (data->gprs_opt == USE_CTX17)
 			ofono_gprs_set_cid_range(gprs, 17, 17);
-		else if (data->gprs_opt == USE_CTX3)
+		else if (data->gprs_opt == USE_CTX3 ||
+		         (data->model == 0x61 && !g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "2")))
 			ofono_gprs_set_cid_range(gprs, 3, 3);
 		else if (data->model == 0x5b)
 			/* limitation: same APN as for attach */
