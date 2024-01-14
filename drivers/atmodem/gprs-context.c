@@ -289,7 +289,7 @@ static void at_gprs_activate_primary(struct ofono_gprs_context *gc,
 
 	len = snprintf(buf, sizeof(buf), "AT+CGDCONT=%u,\"IP\"", ctx->cid);
 
-	if (ctx->apn) {
+	if (*ctx->apn) {
 		switch (gcd->vendor) {
 		case OFONO_VENDOR_UBLOX:
 			/*

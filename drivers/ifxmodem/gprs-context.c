@@ -492,7 +492,7 @@ static void ifx_gprs_activate_primary(struct ofono_gprs_context *gc,
 		break;
 	}
 
-	if (ctx->apn)
+	if (*ctx->apn)
 		snprintf(buf + len, sizeof(buf) - len - 3,
 					",\"%s\"", ctx->apn);
 

@@ -284,7 +284,7 @@ static void at_cgdcont_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	if (g_at_chat_send(gcd->chat, buf, none_prefix, NULL, NULL, NULL) == 0)
 		goto error;
 
-	ncbd = g_memdup(cbd, sizeof(struct cb_data));
+	ncbd = g_memdup2(cbd, sizeof(struct cb_data));
 
 	snprintf(buf, sizeof(buf), "AT%%IPDPACT=%u,1", gcd->active_context);
 
@@ -332,7 +332,7 @@ static void icera_gprs_activate_primary(struct ofono_gprs_context *gc,
 		break;
 	}
 
-	if (ctx->apn)
+	if (*ctx->apn)
 		snprintf(buf + len, sizeof(buf) - len - 3,
 					",\"%s\"", ctx->apn);
 

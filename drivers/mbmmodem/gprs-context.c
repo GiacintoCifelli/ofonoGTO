@@ -134,7 +134,7 @@ out:
 	modem = ofono_gprs_context_get_modem(gc);
 	interface = ofono_modem_get_string(modem, "NetworkInterface");
 
-	ofono_info("IP: %s  Gateway: %s", ip, gateway);
+	ofono_info("IP: %s  Gateway: %s", ip?ip:"", gateway?gateway:"");
 	ofono_info("DNS: %s, %s", dns[0], dns[1]);
 
 	ofono_gprs_context_set_interface(gc, interface);
@@ -345,7 +345,7 @@ static void mbm_cgdcont_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		return;
 	}
 
-	ncbd = g_memdup(cbd, sizeof(struct cb_data));
+	ncbd = g_memdup2(cbd, sizeof(struct cb_data));
 
 	snprintf(buf, sizeof(buf), "AT*ENAP=1,%u", gcd->active_context);
 
@@ -381,7 +381,7 @@ static void mbm_gprs_activate_primary(struct ofono_gprs_context *gc,
 
 	len = snprintf(buf, sizeof(buf), "AT+CGDCONT=%u,\"IP\"", ctx->cid);
 
-	if (ctx->apn)
+	if (*ctx->apn)
 		snprintf(buf + len, sizeof(buf) - len - 3, ",\"%s\"",
 				ctx->apn);
 

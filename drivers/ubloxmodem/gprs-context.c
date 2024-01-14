@@ -315,6 +315,7 @@ static void ublox_send_uauthreq(struct ofono_gprs_context *gc,
 		auth = 2;
 		break;
 	case OFONO_GPRS_AUTH_METHOD_NONE:
+	default:
 		auth = 0;
 		username = password = "";
 		break;

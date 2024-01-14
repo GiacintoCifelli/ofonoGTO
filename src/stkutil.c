@@ -2282,7 +2282,7 @@ static gboolean parse_item_list(struct comprehension_tlv_iter *iter,
 			}
 
 			list = g_slist_prepend(list,
-						g_memdup(&item, sizeof(item)));
+						g_memdup2(&item, sizeof(item)));
 		}
 	} while (comprehension_tlv_iter_next(iter) == TRUE &&
 			comprehension_tlv_iter_get_tag(iter) == tag);
@@ -2318,7 +2318,7 @@ static gboolean parse_provisioning_list(struct comprehension_tlv_iter *iter,
 		if (parse_dataobj_provisioning_file_reference(iter, &file)
 									== TRUE)
 			list = g_slist_prepend(list,
-						g_memdup(&file, sizeof(file)));
+						g_memdup2(&file, sizeof(file)));
 	} while (comprehension_tlv_iter_next(iter) == TRUE &&
 			comprehension_tlv_iter_get_tag(iter) == tag);
 
