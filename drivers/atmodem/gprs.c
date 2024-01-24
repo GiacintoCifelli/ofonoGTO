@@ -541,6 +541,7 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
 	GAtResultIter iter;
 	const char *event;
+	const char *bm;
 
 	g_at_result_iter_init(&iter, result);
 
@@ -559,8 +560,8 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 		gd->attached = FALSE;
 		ofono_gprs_detached_notify(gprs);
 		return;
-	} else if (g_strrstr(event, "PDN ACT")) {
-		sscanf(event, "%*s %*s %*s %u", &gd->last_auto_context_id);
+	} else if (bm = g_strrstr(event, "PDN ACT ")) {
+		sscanf(bm, "%*s %*s %u", &gd->last_auto_context_id);
 
 		g_at_chat_send(gd->chat, "AT+CGDCONT?", cgdcont_prefix,
 				at_cgdcont_read_cb, gprs, NULL);
