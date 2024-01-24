@@ -559,7 +559,7 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 		gd->attached = FALSE;
 		ofono_gprs_detached_notify(gprs);
 		return;
-	} else if (g_str_has_prefix(event, "ME PDN ACT")) {
+	} else if (g_strrstr(event, "PDN ACT")) {
 		sscanf(event, "%*s %*s %*s %u", &gd->last_auto_context_id);
 
 		g_at_chat_send(gd->chat, "AT+CGDCONT?", cgdcont_prefix,
