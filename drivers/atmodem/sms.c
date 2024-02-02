@@ -951,7 +951,7 @@ static void at_cnmi_query_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	int opt;
 	int mode;
 	gboolean supported = FALSE;
-	char buf[128];
+	char buf[128] = {0};
 
 	if (!ok)
 		goto out;
