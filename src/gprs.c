@@ -2759,6 +2759,9 @@ void ofono_gprs_context_deactivated(struct ofono_gprs_context *gc,
 		gc->gprs->flags &= ~GPRS_FLAG_ATTACHED_UPDATE;
 		gprs_attached_update(gc->gprs);
 	}
+
+	if (gc->gprs->driver->attached_status)
+		gc->gprs->driver->attached_status(gc->gprs, registration_status_cb, gc->gprs);
 }
 
 int ofono_gprs_context_driver_register(
