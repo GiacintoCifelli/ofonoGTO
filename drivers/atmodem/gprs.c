@@ -294,48 +294,6 @@ static void at_gprs_registration_status(struct ofono_gprs *gprs,
 	}
 }
 
-static void at_cgdcont_read_cb(gboolean ok, GAtResult *result,
-				gpointer user_data)
-{
-	struct ofono_gprs *gprs = user_data;
-	struct gprs_data *gd = ofono_gprs_get_data(gprs);
-	int activated_cid = gd->last_auto_context_id;
-	const char *apn = NULL;
-	GAtResultIter iter;
-
-	DBG("ok %d", ok);
-
-	if (!ok) {
-		ofono_warn("Can't read CGDCONT contexts.");
-		return;
-	}
-
-	g_at_result_iter_init(&iter, result);
-
-	while (g_at_result_iter_next(&iter, "+CGDCONT:")) {
-		int read_cid;
-
-		if (!g_at_result_iter_next_number(&iter, &read_cid))
-			break;
-
-		if (read_cid != activated_cid)
-			continue;
-
-		/* ignore protocol */
-		g_at_result_iter_skip_next(&iter);
-
-		g_at_result_iter_next_string(&iter, &apn);
-
-		break;
-	}
-
-	if (apn)
-		ofono_gprs_cid_activated(gprs, activated_cid, apn);
-	else
-		ofono_warn("cid %u: Received activated but no apn present",
-				activated_cid);
-}
-
 static int cops_cb(gboolean ok, GAtResult *result)
 {
 	GAtResultIter iter;
@@ -541,7 +499,6 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 	struct gprs_data *gd = ofono_gprs_get_data(gprs);
 	GAtResultIter iter;
 	const char *event;
-	const char *bm;
 
 	g_at_result_iter_init(&iter, result);
 
