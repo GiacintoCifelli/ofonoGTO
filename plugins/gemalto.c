@@ -3122,13 +3122,12 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 			ofono_gprs_set_cid_range(gprs, 1, 11);
 		else
 			ofono_gprs_set_cid_range(gprs, 4, 16);
-		// maybe rename the next to gemaltomodem-wwan
-		if (data->gprs_opt != USE_CTX3)
-			gc = ofono_gprs_context_create(modem, 0,
-						"gemaltomodemswwan", data->app);
+
+		if (data->gprs_opt == USE_CTX3 || data->model == 0x5b)
+			gc = ofono_gprs_context_create(modem, 0, "gemaltomodemswwanblocking", data->app);
 		else
-			gc = ofono_gprs_context_create(modem, 0,
-					"gemaltomodemswwanblocking", data->app);
+			gc = ofono_gprs_context_create(modem, 0, "gemaltomodemswwan", data->app);
+
 	} else if (data->gprs_opt == USE_PPP) {
 		/* plain PPP only works from mdm ports */
 		gprs = ofono_gprs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem",
