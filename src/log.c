@@ -313,13 +313,16 @@ int __ofono_log_init(const char *program, const char *debug,
 		option |= LOG_PERROR;
 
 #ifdef __GLIBC__
-	signal_setup(signal_handler);
+	if (getenv("OFONO_STACK_TRACE"))
+		signal_setup(signal_handler);
 #endif
 
 	openlog(basename(program), option, LOG_DAEMON);
 
 	syslog(LOG_INFO, "oFono version %s", VERSION);
 
+	if (getenv("OFONO_STACK_TRACE"))
+		syslog(LOG_INFO, "oFono OFONO_STACK_TRACE enable");
 	return 0;
 }
 
@@ -330,7 +333,8 @@ void __ofono_log_cleanup(void)
 	closelog();
 
 #ifdef __GLIBC__
-	signal_setup(SIG_DFL);
+	if (getenv("OFONO_STACK_TRACE"))
+		signal_setup(SIG_DFL);
 #endif
 
 	g_strfreev(enabled);
