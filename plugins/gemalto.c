@@ -2714,6 +2714,8 @@ static void store_cgmm(gboolean ok, GAtResult *result, gpointer user_data)
 				data->model = 0x61;
 			else if (g_ascii_strncasecmp(model, "ALAS5-", 6) == 0)
 				data->model = 0x65;
+			else if (g_ascii_strncasecmp(model, "PLS83-", 6) == 0)
+				data->model = 0x66;
 			return;
 		}
 	}
@@ -2950,6 +2952,14 @@ static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
 	g_free(cbd);
 }
 
+static void gemalto_pre_sim_init_actia(struct ofono_modem *modem)
+{
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	unsigned int vendor;
+	vendor = data->model;
+	DBG("Vendor enum value: '%d'", vendor);
+}
+
 static void gemalto_retrieve_provider(gboolean success, GAtResult *result, gpointer user_data)
 {
 	GAtResultIter iter;
@@ -2980,6 +2990,8 @@ static void gemalto_pre_sim(struct ofono_modem *modem)
 
 	DBG("%p", modem);
 	gemalto_exec_stored_cmd(modem, "pre_sim");
+
+	gemalto_pre_sim_init_actia(modem);
 
 	/* Retrieve Provider used by LTE and for the cid range */
 	g_at_chat_send(data->app, "AT^SCFG=\"MEopMode/Prov/Cfg\"", scfg_prefix,
