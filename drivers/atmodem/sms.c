@@ -828,9 +828,9 @@ static inline gboolean append_cnmi_element(char *buf, int *len, int cap,
 static inline gboolean append_empty_cnmi_element(char *buf, int *len, gboolean last)
 {
 	if (last)
-		buf[*len + 1] = '\0';
+		buf[*len] = '\0';
 	else
-		buf[*len + 1] = ',';
+		buf[*len] = ',';
 	*len += 1;
 	return TRUE;
 }
