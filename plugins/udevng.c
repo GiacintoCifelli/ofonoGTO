@@ -770,7 +770,8 @@ static gboolean setup_zte_vanilla(struct modem_info *modem)
 		else if(g_strcmp0(info->interface, "2/6/0")==0) // uses adb enum for cdc_ether interface!
 			net=info->devnode;
 	}
-	DBG("aux=%s, net=%s", aux, net);
+
+	DBG("aux=%s, net=%s", aux?aux:"(null)", net?net:"(null)");
 	if(aux==NULL || net==NULL) return FALSE;
 	ofono_modem_set_string(modem->modem, "Aux", aux);
 	ofono_modem_set_string(modem->modem, "Net", net);
@@ -923,7 +924,7 @@ static gboolean setup_quectelqmi(struct modem_info *modem)
 		}
 	}
 
-	DBG("qmi=%s net=%s", qmi, net);
+	DBG("qmi=%s net=%s", qmi?qmi:"(null)", net?net:"(null)");
 
 	if (qmi == NULL || net == NULL)
 		return FALSE;
