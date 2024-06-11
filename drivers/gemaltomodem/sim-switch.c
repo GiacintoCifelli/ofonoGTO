@@ -47,9 +47,13 @@ static void gemalto_set_sim_selection_cb(gboolean success, GAtResult *result, gp
 static void gemalto_set_sim_dualmode_cb(gboolean success, GAtResult *result, gpointer user_data)
 {
 	struct cb_data *cbd = user_data;
-	struct sim_switch_data *smd = ofono_sim_switch_get_data(cbd->data);
 	ofono_sim_switch_set_active_card_slot_cb_t cb = cbd->cb;
 	unsigned int index = GPOINTER_TO_UINT(cbd->user);
+	struct sim_switch_data *smd = ofono_sim_switch_get_data(cbd->data);
+	if (smd == NULL) {
+		ofono_error("Could not get sim switch data");
+		return;
+	}
 
 	if (success) {
 		if (index == SIMCARD_INDEX){
@@ -73,9 +77,13 @@ static void gemalto_dual_mode_read_cb(gboolean success, GAtResult *result, gpoin
 	GAtResultIter iter;
 	const char *dualmode_val;
 	struct cb_data *cbd = user_data;
-	struct sim_switch_data *smd = ofono_sim_switch_get_data(cbd->data);
 	ofono_sim_switch_set_active_card_slot_cb_t cb = cbd->cb;
 	unsigned int index = GPOINTER_TO_UINT(cbd->user);
+	struct sim_switch_data *smd = ofono_sim_switch_get_data(cbd->data);
+	if (smd == NULL) {
+		ofono_error("Could not get sim switch data");
+		return;
+	}
 
 	if (success) {
 		g_at_result_iter_init(&iter, result);
@@ -143,6 +151,10 @@ static void gemalto_dual_mode_read_init_cb(gboolean success, GAtResult *result, 
 	const char *dualmode_val;
 	struct ofono_sim_switch *sm = user_data;
 	struct sim_switch_data *smd = ofono_sim_switch_get_data(sm);
+	if (smd == NULL) {
+		ofono_error("Could not get sim switch data");
+		return;
+	}
 
 	if (success) {
 		g_at_result_iter_init(&iter, result);

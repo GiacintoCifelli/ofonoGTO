@@ -250,6 +250,10 @@ void ofono_sim_switch_register(struct ofono_sim_switch *ssw)
 	DBusConnection *conn = ofono_dbus_get_connection();
 	struct ofono_modem *modem = __ofono_atom_get_modem(ssw->atom);
 	const char *path = __ofono_atom_get_path(ssw->atom);
+	if (modem == NULL){
+		ofono_error("Could not find modem");
+		return;
+	}
 	DBG("");
 	if (!g_dbus_register_interface(	conn, path,
 									OFONO_SIM_SWITCH_INTERFACE,
