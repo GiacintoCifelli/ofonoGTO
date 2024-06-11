@@ -79,6 +79,8 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 void print_trace();
 
@@ -128,6 +130,11 @@ enum gprs_option {
 	USE_CTX_INV = 6,	/* inverted syntax idx,act */
 };
 
+/* System V IPC Key */
+#define GEMALTO_SYSV_IPC_KEY        5678
+/* Shared memory MAX Size */
+#define ACP_OFONO_SHM_MAX_SIZE     10
+
 static const char *none_prefix[] = { NULL };
 static const char *cfun_prefix[] = { "+CFUN:", NULL };
 static const char *sctm_prefix[] = { "^SCTM:", NULL };
@@ -136,7 +143,9 @@ static const char *sqport_prefix[] = { "^SQPORT:", NULL };
 static const char *sgpsc_prefix[] = { "^SGPSC:", NULL };
 static const char *scfg_prefix[] = { "^SCFG:", NULL };
 static const char *sgauth_prefix[] = { "^SGAUTH:", NULL };
+static const char *cpin_prefix[] = { "+CPIN:", NULL};
 int ofono_netreg_modem_status = -1;
+gboolean bIsModemShuttingDown = FALSE;
 
 typedef void (*OpenResultFunc)(gboolean success, struct ofono_modem *modem);
 
@@ -610,6 +619,31 @@ static void gemalto_exec_stored_cmd(struct ofono_modem *modem, const char *filen
  ******************************************************************************/
 
 #define CINTERION_LEGACY_HWMON_INTERFACE OFONO_SERVICE ".cinterion.HardwareMonitor"
+
+static void pin_check_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	GAtResultIter iter;
+	const char *ready = "READY";
+	const char *sim_pin_auth;
+
+	DBG("");
+
+	if(!ok)
+		return;
+
+	g_at_result_iter_init(&iter, result);
+
+	if(!g_at_result_iter_next(&iter, "+CPIN:"))
+		return;
+
+	if(!g_at_result_iter_next_string(&iter, &sim_pin_auth))
+		return;
+
+	if(g_strcmp0(sim_pin_auth, ready)) {
+		ofono_error("Authentication is required!!!");
+		return;
+	}
+}
 
 static void gemalto_sctmb_notify(GAtResult *result, gpointer user_data)
 {
@@ -2834,6 +2868,8 @@ static int gemalto_enable(struct ofono_modem *modem)
 	if (!modem || !data)
 		return -EINVAL;
 
+	bIsModemShuttingDown = FALSE;
+
 	data->conn = g_str_equal(conn_type,"Serial") ? GEMALTO_CONNECTION_SERIAL
 						: GEMALTO_CONNECTION_USB;
 
@@ -3329,8 +3365,39 @@ static int gemalto_disable(struct ofono_modem *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	struct mbim_message *message;
+	key_t key = GEMALTO_SYSV_IPC_KEY;
+	char *shm, *token = NULL;
+	int shmid;
 
 	DBG("%p", modem);
+
+	/* Signal that we are shutting down the modem to prevent from memory error on network side (periodic timer for signal strength) */
+	bIsModemShuttingDown = TRUE;
+
+	if((shmid = shmget(key, ACP_OFONO_SHM_MAX_SIZE, IPC_CREAT | 0666)) < 0)
+	{
+		ofono_error("Failed to allocate shared mem seg");
+	} else {
+		if((shm = (char *)shmat(shmid, (void *)0, 0)) == (char *) -1)
+		  {
+			  ofono_error("Failed to attach to shared mem");
+		  } else {
+			token = strstr(shm, "standby");
+			shmdt(shm);
+			shmctl(shmid, IPC_RMID, NULL);
+		}
+	}
+
+	if (token)
+	{
+		DBG("standby mode");
+
+		gemalto_exec_stored_cmd(modem, "wakeUpSMScfg");
+
+		/* Check network authentication */
+		g_at_chat_send(data->app, "AT+CPIN?", cpin_prefix,
+						pin_check_cb, modem, NULL);
+	}
 
 	if (data->conn == GEMALTO_CONNECTION_SERIAL)
 		return gemalto_disable_serial(modem);
@@ -3364,7 +3431,10 @@ static int gemalto_disable(struct ofono_modem *modem)
 		return 0;
 
 	gemalto_exec_stored_cmd(modem, "disable");
-	gemalto_set_cfun(data->app, 41, modem);
+
+	if (!token)
+		g_at_chat_send(data->app, "AT^SMSO", none_prefix,
+							gemalto_smso_cb, modem, NULL);
 
 	return -EINPROGRESS;
 }

@@ -1362,6 +1362,13 @@ static gboolean signal_strength_notify(gpointer user_data)
 
 	netreg_status = ofono_netreg_get_status(netreg);
 
+	if (bIsModemShuttingDown)
+	{
+		DBG("Stopping Timer...");
+	    ofono_signal_strength_notify_flag = 0;
+	    return FALSE;
+	}
+
 	if (!ofono_netreg_modem_status ||
 		( netreg_status != NETWORK_REGISTRATION_STATUS_REGISTERED &&
 	      netreg_status != NETWORK_REGISTRATION_STATUS_ROAMING)) {
