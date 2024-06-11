@@ -29,6 +29,7 @@ extern "C" {
 #include <ofono/types.h>
 
 struct ofono_netreg;
+extern int ofono_netreg_modem_status;
 
 /* Theoretical limit is 16, but each GSM char can be encoded into
  *  * 3 UTF8 characters resulting in 16*3=48 chars

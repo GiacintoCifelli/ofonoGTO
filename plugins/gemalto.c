@@ -136,6 +136,7 @@ static const char *sqport_prefix[] = { "^SQPORT:", NULL };
 static const char *sgpsc_prefix[] = { "^SGPSC:", NULL };
 static const char *scfg_prefix[] = { "^SCFG:", NULL };
 static const char *sgauth_prefix[] = { "^SGAUTH:", NULL };
+int ofono_netreg_modem_status = -1;
 
 typedef void (*OpenResultFunc)(gboolean success, struct ofono_modem *modem);
 
@@ -2912,6 +2913,8 @@ static void gemalto_set_online_serial(struct ofono_modem *modem,
 	cbd->user = modem;
 
 	DBG("modem %p %s", modem, online ? "online" : "offline");
+
+	ofono_netreg_modem_status = online;
 
 	if (online)
 		gemalto_exec_stored_cmd(modem, "set_online");

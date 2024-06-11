@@ -43,6 +43,7 @@
 #define NETWORK_REGISTRATION_FLAG_HOME_SHOW_PLMN	0x1
 #define NETWORK_REGISTRATION_FLAG_ROAMING_SHOW_SPN	0x2
 #define NETWORK_REGISTRATION_FLAG_READING_PNN		0x4
+#define OFONO_SIGNAL_STRENGTH_TIMEOUT				5
 
 #define MAX_REJECT_CAUSE_LENGTH 80
 
@@ -91,6 +92,7 @@ struct network_operator_data {
 };
 
 static GSList *g_drivers = NULL;
+static int ofono_signal_strength_notify_flag;
 
 static const char *registration_mode_to_string(int mode)
 {
@@ -1351,6 +1353,32 @@ static void notify_emulator_status(struct ofono_atom *atom, void *data)
 	}
 }
 
+static gboolean signal_strength_notify(gpointer user_data)
+{
+	struct ofono_netreg *netreg = user_data;
+	int netreg_status;
+
+	DBG("Timer Handler: Launched");
+
+	netreg_status = ofono_netreg_get_status(netreg);
+
+	if (!ofono_netreg_modem_status ||
+		( netreg_status != NETWORK_REGISTRATION_STATUS_REGISTERED &&
+	      netreg_status != NETWORK_REGISTRATION_STATUS_ROAMING)) {
+	    DBG("Stopping Timer...");
+	    ofono_signal_strength_notify_flag = 0;
+	    return FALSE;
+	}
+
+	DBG("Query Signal Strength...");
+
+	if(netreg->driver->strength != NULL)
+	    netreg->driver->strength(netreg,
+			signal_strength_callback, netreg);
+
+	return TRUE;
+}
+
 void ofono_netreg_status_notify(struct ofono_netreg *netreg, int status,
 			int lac, int ci, int tech)
 {
@@ -1387,9 +1415,16 @@ void ofono_netreg_status_notify(struct ofono_netreg *netreg, int status,
 			netreg->driver->current_operator(netreg,
 					current_operator_callback, netreg);
 
-		if (netreg->driver->strength != NULL)
-			netreg->driver->strength(netreg,
-					signal_strength_callback, netreg);
+		if (!ofono_signal_strength_notify_flag) {
+			if (netreg->driver->strength != NULL)
+				netreg->driver->strength(netreg,
+						signal_strength_callback, netreg);
+
+			DBG("Starting Timer...");
+			g_timeout_add_seconds(OFONO_SIGNAL_STRENGTH_TIMEOUT,
+						signal_strength_notify, netreg);
+			ofono_signal_strength_notify_flag = 1;
+		}
 	} else {
 		struct ofono_error error;
 

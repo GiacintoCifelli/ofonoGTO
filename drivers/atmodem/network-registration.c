@@ -1019,7 +1019,7 @@ static void gemalto_ciev_notify(GAtResult *result, gpointer user_data)
     else
       strength = (strength * 100) / (nd->signal_max - nd->signal_min);
 
-    ofono_netreg_strength_notify(netreg, strength);
+    //ofono_netreg_strength_notify(netreg, strength);
 	}
 }
 
@@ -1339,6 +1339,102 @@ static void csq_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	cb(&error, strength, cbd->data);
 }
 
+static int convert_dbm_strength_into_percent(int strength_dbm, int min, int max, int max_scale)
+{
+	int strength = 0, ref_min = min, ref_max = max;
+
+	if (strength_dbm < ref_min) {
+		strength = 0;
+	} else if (strength_dbm >= ref_min && strength_dbm < ref_max) {
+		int initial_value = 1, step = 1, nb_loop = 0;
+		int tmp_value = ref_min;
+
+		while (tmp_value != strength_dbm && tmp_value < ref_max)
+		{
+			tmp_value += step;
+			nb_loop ++;
+			if (tmp_value != strength_dbm && tmp_value == ref_max) {
+				tmp_value = ref_min;
+				strength_dbm -= 1;
+				nb_loop = 0;
+			}
+		}
+		strength = initial_value + nb_loop;
+	} else if (strength_dbm >= ref_max) {
+		strength = max_scale;
+	} else { /* empty else */ }
+
+	strength = (strength * 100) / max_scale;
+	return strength;
+}
+
+static void smoni_query_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	ofono_netreg_strength_cb_t cb = cbd->cb;
+	struct ofono_error error;
+	GAtResultIter iter;
+	int strength = 0;
+	GSList *l;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	if (!ok) {
+		cb(&error, -1, cbd->data);
+		return;
+	}
+
+	g_at_result_iter_init(&iter, result);
+
+	if (!g_at_result_iter_next(&iter, "^SMONI:"))
+		return;
+
+	DBG("");
+
+	l = result->lines;
+	if (strstr(l->data, "^SMONI: ") != NULL) {
+		gchar **body = g_strsplit(l->data, "^SMONI: ", 2);
+		if (*body != NULL) {
+			gchar **data = g_strsplit(body[1], ",", 20);
+			if (*data != NULL) {
+				if (g_strcmp0(data[1], "SEARCH") != 0) {
+					if (!g_strcmp0(data[0], "2G")) {
+						// Receiving level of the BCCH carrier in dBm
+						strength = atoi(data[2]);
+						strength = convert_dbm_strength_into_percent(strength, -110, -47, 64);
+					} else if (!g_strcmp0 (data[0], "3G")) {
+						// Received Signal Code Power in dBm
+						strength = atoi(data[4]);
+						strength = convert_dbm_strength_into_percent(strength, -140, -44, 97);
+					} else if (!g_strcmp0 (data[0], "4G")) {
+						// Reference Signal Received Power
+						if (g_str_equal(data[12], "-")){
+							strength = -1;
+						} else {
+							strength = atoi(data[12]);
+							if (!strength) {
+								strength = -1;
+							}
+							else {
+								strength = convert_dbm_strength_into_percent(strength, -140, -44, 97);
+							}
+						}
+					} else {
+						strength = -1;
+					}
+					g_strfreev(data);
+				} else {
+					strength = -1;
+				}
+				g_strfreev(body);
+			}
+		}
+
+		DBG("strength = %d", strength);
+		cb(&error, strength, cbd->data);
+	}
+}
+
 static void at_signal_strength(struct ofono_netreg *netreg,
 				ofono_netreg_strength_cb_t cb, void *data)
 {
@@ -1349,6 +1445,10 @@ static void at_signal_strength(struct ofono_netreg *netreg,
 
 	switch(nd->vendor) {
 	case OFONO_VENDOR_GEMALTO:
+		if (g_at_chat_send(nd->chat, "AT^SMONI", smoni_prefix,
+					smoni_query_cb, cbd, g_free) > 0)
+			return;
+		break;
 	case OFONO_VENDOR_ZTE_VANILLA:
 		break;
 	default:
