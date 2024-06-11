@@ -66,6 +66,9 @@
 #include <src/storage.h>
 #include <ofono/gemalto.h>
 
+#include <src/actia/sim-switch.h>
+#include <src/actia/default-properties.h>
+
 /* debug utilities - begin */
 
 #define REDCOLOR "\x1b\x5b\x30\x31\x3b\x33\x31\x6d"
@@ -2962,7 +2965,8 @@ static void gemalto_pre_sim_init_actia(struct ofono_modem *modem)
 	struct gemalto_data *data = ofono_modem_get_data(modem);
 	unsigned int vendor;
 	vendor = data->model;
-	DBG("Vendor enum value: '%d'", vendor);
+	/* Create the sim switch */
+	ofono_sim_switch_create(modem, vendor, "gemaltomodem", data->app);
 }
 
 static void gemalto_retrieve_provider(gboolean success, GAtResult *result, gpointer user_data)

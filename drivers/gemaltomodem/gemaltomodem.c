@@ -42,11 +42,15 @@ static int gemaltomodem_init(void)
 	gemalto_gprs_context_swwan_init();
 	gemalto_gprs_context_mbim_init();
 
+	gemalto_sim_switch_init();
+
 	return 0;
 }
 
 static void gemaltomodem_exit(void)
 {
+	gemalto_sim_switch_exit();
+
 	gemalto_gprs_context_mbim_exit();
 	gemalto_gprs_context_swwan_exit();
 	gemalto_gprs_context_swwan_blocking_exit();

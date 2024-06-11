@@ -486,7 +486,8 @@ builtin_sources += drivers/atmodem/atutil.h \
 			drivers/gemaltomodem/lte.c \
 			drivers/gemaltomodem/gprs-context-swwan-blocking.c \
 			drivers/gemaltomodem/gprs-context-swwan.c \
-			drivers/gemaltomodem/gprs-context-mbim.c
+			drivers/gemaltomodem/gprs-context-mbim.c \
+			drivers/gemaltomodem/sim-switch.c
 
 builtin_modules += ztevanillamodem
 builtin_sources += drivers/atmodem/atutil.h \
@@ -737,6 +738,7 @@ src_ofonod_SOURCES = $(builtin_sources) $(gatchat_sources) src/ofono.ver \
 			src/netmonagent.c src/netmonagent.h
 
 src_ofonod_SOURCES += src/actia/default-properties.c src/actia/default-properties.h
+src_ofonod_SOURCES += src/actia/sim-switch.c src/actia/sim-switch.h
 
 src_ofonod_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) $(ell_ldadd) \
 			@GLIB_LIBS@ @DBUS_LIBS@ -ldl
@@ -786,7 +788,8 @@ doc_files = doc/overview.txt doc/ofono-paper.txt doc/release-faq.txt \
 			doc/allowed-apns-api.txt \
 			doc/lte-api.txt \
 			doc/gemalto-hardware-monitor-api.txt \
-			doc/ims-api.txt
+			doc/ims-api.txt \
+			doc/sim-switch-api.txt
 
 
 test_scripts = test/backtrace \

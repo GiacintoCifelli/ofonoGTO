@@ -1352,6 +1352,7 @@ static const struct {
 	{ OFONO_CONNECTION_MANAGER_INTERFACE,		"gprs"	},
 	{ OFONO_TEXT_TELEPHONY_INTERFACE,		"tty"	},
 	{ OFONO_LOCATION_REPORTING_INTERFACE,		"gps"	},
+	{ OFONO_SIM_SWITCH_INTERFACE,		"simswitch"	},
 	{ },
 };
 

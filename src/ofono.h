@@ -153,6 +153,7 @@ enum ofono_atom_type {
 	OFONO_ATOM_TYPE_NETMON,
 	OFONO_ATOM_TYPE_LTE,
 	OFONO_ATOM_TYPE_IMS,
+	OFONO_ATOM_TYPE_SIM_SWITCH,
 };
 
 enum ofono_atom_watch_condition {

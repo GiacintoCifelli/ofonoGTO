@@ -1,0 +1,38 @@
+SimSwitch hierarchy
+===============
+
+Service		org.ofono
+Interface	org.ofono.SimSwitch
+Object path	[variable prefix]/{modem0,modem1,...}
+
+Methods		dict GetProperties()
+
+			Returns SimSwitch properties for the modem object. See
+			the properties section for available properties.
+
+		void SetProperty(string property, variant value)
+
+			Sets the given property value to that specified in
+			call parameter.
+
+			Possible Errors: [service].Error.InProgress
+					[service].Error.NotImplemented
+					[service].Error.InvalidArguments
+					[service].Error.Failed
+
+Signals		PropertyChanged(string name, variant value)
+
+			This signal indicates a changed value of the given
+			property.
+
+Properties	uint32 CardSlotCount [readonly]
+
+			Contains the count of number of SIM card slots available.
+
+		uint32 ActiveCardSlot [readwrite]
+
+			Contains the index of the currently active SIM card slot
+			for dual SIM single active mode.
+
+			This property will range from 1 (default) to
+			CardSlotCount (max) value.
