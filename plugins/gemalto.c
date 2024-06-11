@@ -53,6 +53,7 @@
 #include <ofono/gprs.h>
 #include <ofono/gprs-context.h>
 #include <ofono/location-reporting.h>
+#include <ofono/radio-settings.h>
 #include <drivers/atmodem/atutil.h>
 #include <drivers/atmodem/vendor.h>
 #include <string.h>
@@ -3213,6 +3214,8 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 	data->netreg = ofono_netreg_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
 
 	ofono_cbs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
+
+	ofono_radio_settings_create(modem, OFONO_VENDOR_GEMALTO, "gemaltomodem", data->app);
 }
 
 static void sw_reset_cb(gboolean ok, GAtResult *result, gpointer user_data)

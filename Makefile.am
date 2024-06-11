@@ -487,7 +487,8 @@ builtin_sources += drivers/atmodem/atutil.h \
 			drivers/gemaltomodem/gprs-context-swwan-blocking.c \
 			drivers/gemaltomodem/gprs-context-swwan.c \
 			drivers/gemaltomodem/gprs-context-mbim.c \
-			drivers/gemaltomodem/sim-switch.c
+			drivers/gemaltomodem/sim-switch.c \
+			drivers/gemaltomodem/radio-settings.c
 
 builtin_modules += ztevanillamodem
 builtin_sources += drivers/atmodem/atutil.h \

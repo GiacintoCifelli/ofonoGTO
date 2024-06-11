@@ -44,3 +44,6 @@ extern void gemalto_gprs_context_mbim_exit();
 
 extern void gemalto_sim_switch_init(void);
 extern void gemalto_sim_switch_exit(void);
+
+extern void gemalto_radio_settings_init(void);
+extern void gemalto_radio_settings_exit(void);

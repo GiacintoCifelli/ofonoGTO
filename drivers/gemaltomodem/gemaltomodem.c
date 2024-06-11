@@ -43,12 +43,14 @@ static int gemaltomodem_init(void)
 	gemalto_gprs_context_mbim_init();
 
 	gemalto_sim_switch_init();
+	gemalto_radio_settings_init();
 
 	return 0;
 }
 
 static void gemaltomodem_exit(void)
 {
+	gemalto_radio_settings_exit();
 	gemalto_sim_switch_exit();
 
 	gemalto_gprs_context_mbim_exit();
