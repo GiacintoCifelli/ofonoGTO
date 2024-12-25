@@ -6407,7 +6407,7 @@ char *stk_text_to_html(const char *utf8,
 			break;
 		case '\r':
 		{
-			char *next = g_utf8_next_char(text);
+			const char *next = g_utf8_next_char(text);
 			gunichar c = g_utf8_get_char(next);
 
 			g_string_append(string, "<br/>");

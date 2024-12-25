@@ -98,6 +98,11 @@ extern char print_buf[];
 		sprintf(print_buf, x);		\
 } while (0)
 
+#define g_ril_append_print_buf2(gril, x...) do {	\
+	if (gril && g_ril_get_trace(gril))	\
+		sprintf(print_buf+strlen(print_buf), x);		\
+} while (0)
+
 #define g_ril_print_unsol(gril, message)				\
 	G_RIL_TRACE(gril, "[%d,UNSOL]< %s %s",				\
 			g_ril_get_slot(gril),				\

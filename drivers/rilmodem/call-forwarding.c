@@ -113,8 +113,7 @@ static void ril_query_call_fwd_cb(struct ril_msg *message, gpointer user_data)
 			goto error;
 		}
 
-		g_ril_append_print_buf(fd->ril, "%s [%d,%d,%d,%s,%d]",
-					print_buf,
+		g_ril_append_print_buf2(fd->ril, " [%d,%d,%d,%s,%d]",
 					list[i].status,
 					list[i].cls,
 					list[i].phone_number.type,
@@ -123,7 +122,7 @@ static void ril_query_call_fwd_cb(struct ril_msg *message, gpointer user_data)
 
 	}
 
-	g_ril_append_print_buf(fd->ril, "%s}", print_buf);
+	g_ril_append_print_buf2(fd->ril, "}");
 	g_ril_print_response(fd->ril, message);
 
 done:

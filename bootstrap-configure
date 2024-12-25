@@ -15,6 +15,5 @@ fi
 		--disable-cdmamodem \
 		--disable-phonesim \
 		--disable-isimodem \
-		--disable-rilmodem \
 		--disable-bluetooth \
 		--disable-datafiles $*

@@ -582,9 +582,8 @@ static void ril_cops_list_cb(struct ril_msg *message, gpointer user_data)
 
 		i++;
 next:
-		g_ril_append_print_buf(nd->ril, "%s [lalpha=%s, salpha=%s, "
+		g_ril_append_print_buf2(nd->ril, " [lalpha=%s, salpha=%s, "
 				" numeric=%s status=%s]",
-				print_buf,
 				lalpha, salpha, numeric, status);
 		g_free(lalpha);
 		g_free(salpha);
@@ -592,7 +591,7 @@ next:
 		g_free(status);
 	}
 
-	g_ril_append_print_buf(nd->ril, "%s}", print_buf);
+	g_ril_append_print_buf2(nd->ril, "}");
 	g_ril_print_response(nd->ril, message);
 
 	CALLBACK_WITH_SUCCESS(cb, i, ops, cbd->data);
