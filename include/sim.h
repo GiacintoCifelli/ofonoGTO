@@ -210,6 +210,10 @@ struct ofono_sim_driver {
 	void (*logical_access)(struct ofono_sim *sim, int session_id,
 			const unsigned char *pdu, unsigned int len,
 			ofono_sim_logical_access_cb_t cb, void *data);
+	void (*trigger_fallback)(struct ofono_sim *sim,
+			ofono_sim_lock_unlock_cb_t cb, void *data);
+	void (*cancel_fallback)(struct ofono_sim *sim,
+			ofono_sim_lock_unlock_cb_t cb, void *data);
 };
 
 int ofono_sim_driver_register(const struct ofono_sim_driver *d);
