@@ -69,6 +69,7 @@
 
 #include <src/actia/sim-switch.h>
 #include <src/actia/default-properties.h>
+#include <src/actia/vendor.h>
 
 /* debug utilities - begin */
 
@@ -2718,48 +2719,38 @@ static void store_cgmm(gboolean ok, GAtResult *result, gpointer user_data)
 		if (model && *model) {
 			memcpy(data->modelstr, model, sizeof(data->modelstr));
 
-			if (g_ascii_strncasecmp(model, "TC", 2) == 0)
+            if (    g_ascii_strncasecmp(model, "TC", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "MC", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "AC", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "HC", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "HM", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "XT", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "AGS", 3) == 0 ||
+                    g_ascii_strncasecmp(model, "BGS", 3) == 0)
 				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "MC", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "AC", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "HC", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "HM", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "XT", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "AGS", 3) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "BGS", 3) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "AH3", 3) == 0)
-				data->model = 0x55;
-			else if (g_ascii_strncasecmp(model, "AHS", 3) == 0)
-				data->model = 0x55;
-			else if (g_ascii_strncasecmp(model, "PHS", 3) == 0)
-				data->model = 0x55;
-			else if (g_ascii_strncasecmp(model, "PH8", 3) == 0)
-				data->model = 0x55;
-			else if (g_ascii_strncasecmp(model, "AHS", 3) == 0)
+			else if (g_ascii_strncasecmp(model, "AH3", 3) == 0 ||
+                     g_ascii_strncasecmp(model, "AHS", 3) == 0 ||
+				     g_ascii_strncasecmp(model, "PHS", 3) == 0 ||
+				     g_ascii_strncasecmp(model, "PH8", 3) == 0 ||
+				     g_ascii_strncasecmp(model, "AHS", 3) == 0)
 				data->model = 0x55;
 			else if (g_ascii_strncasecmp(model, "EHS", 3) == 0)
 				data->model = 0x58;
 			else if (g_ascii_strncasecmp(model, "ELS31-", 6) == 0)
 				data->model = 0xa0;
-			else if (g_ascii_strncasecmp(model, "ELS61-", 6) == 0)
-				data->model = 0x5b;
-			else if (g_ascii_strncasecmp(model, "PLS62-", 6) == 0)
-				data->model = 0x5b;
-			else if (g_ascii_strncasecmp(model, "PLS8-", 5) == 0)
-				data->model = 0x61;
-			else if (g_ascii_strncasecmp(model, "ALS3-", 5) == 0)
-				data->model = 0x61;
+			else if (g_ascii_strncasecmp(model, "ELS61-", 6) == 0 ||
+                     g_ascii_strncasecmp(model, "PLS62-", 6) == 0)
+				data->model = OFONO_VENDOR_GEMALTO_CINT_PLS62;
+			else if (g_ascii_strncasecmp(model, "PLS8-", 5) == 0 ||
+                     g_ascii_strncasecmp(model, "ALS3-", 5) == 0)
+				data->model = OFONO_VENDOR_GEMALTO_CINT_PLS8_ALS3;
 			else if (g_ascii_strncasecmp(model, "ALAS5-", 6) == 0)
-				data->model = 0x65;
-			else if (g_ascii_strncasecmp(model, "PLS83-", 6) == 0)
-				data->model = 0x66;
+				data->model = OFONO_VENDOR_GEMALTO_CINT_ALAS5;
+            else if (g_ascii_strncasecmp(model, "ALAS5V-", 7) == 0)
+				data->model = OFONO_VENDOR_GEMALTO_CINT_ALAS5V;
+			else if (g_ascii_strncasecmp(model, "PLS63-", 6) == 0 ||
+                     g_ascii_strncasecmp(model, "PLS83-", 6) == 0)
+				data->model = OFONO_VENDOR_GEMALTO_CINT_PLS63_PLS83;
 			return;
 		}
 	}
@@ -3153,16 +3144,16 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 		gprs = ofono_gprs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem",
 								data->app);
 
-		if (g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "2") == 0 || 
-		    g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "vzwdcus") == 0 || 
+		if (g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "2") == 0 ||
+		    g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "vzwdcus") == 0 ||
 		    g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "CDMAless-Verizon") == 0)
-		{    
+		{
 			ofono_gprs_set_cid_range(gprs, 3, 3);
 			DBG("CID range: 3, 3");
-		} else {         
+		} else {
 			ofono_gprs_set_cid_range(gprs, 1, 1);
 			DBG("CID range: 1, 1");
-		}         
+		}
 
 		gc = ofono_gprs_context_create(modem, 0, "qmimodem",
 								data->qmid);
