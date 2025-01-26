@@ -44,6 +44,7 @@
 
 static const char *none_prefix[] = { NULL };
 static const char *creg_prefix[] = { "+CREG:", NULL };
+static const char *cereg_prefix[] = { "+CEREG", NULL };
 static const char *cops_prefix[] = { "+COPS:", NULL };
 static const char *csq_prefix[] = { "+CSQ:", NULL };
 static const char *cind_prefix[] = { "+CIND:", NULL };
@@ -69,6 +70,9 @@ struct netreg_data {
 	int signal_max; /* max strength reported via CIND */
 	int signal_invalid; /* invalid strength reported via CIND */
 	int tech;
+	int status;
+	int lac;
+	int ci;
 	struct ofono_network_time time;
 	guint nitz_timeout;
 	unsigned int vendor;
@@ -78,6 +82,7 @@ struct tech_query {
 	int status;
 	int lac;
 	int ci;
+	int tech;
 	struct ofono_netreg *netreg;
 };
 
@@ -212,7 +217,7 @@ static int gemalto_parse_tech(GAtResult *result)
 	return tech;
 }
 
-static void at_creg_cb(gboolean ok, GAtResult *result, gpointer user_data)
+static void cinterion_cereg_cb(gboolean ok, GAtResult *result, gpointer user_data)
 {
 	struct cb_data *cbd = user_data;
 	ofono_netreg_status_cb_t cb = cbd->cb;
@@ -227,23 +232,102 @@ static void at_creg_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		return;
 	}
 
-	if (at_util_parse_reg(result, "+CREG:", NULL, &status,
-				&lac, &ci, &tech, nd->vendor) == FALSE) {
+	if (at_util_parse_reg(result, "+CEREG:", NULL, &status, &lac,
+								&ci, &tech, nd->vendor) == FALSE) {
 		CALLBACK_WITH_FAILURE(cb, -1, -1, -1, -1, cbd->data);
 		return;
 	}
 
-	if ((status == 1 || status == 5) && (tech == -1))
-		tech = nd->tech;
+	if (nd->vendor == OFONO_VENDOR_GEMALTO_PLS62 &&
+		(status == 3 || nd->status == 3)) {
+		/* For PLS62 only, make of denied event the top priority */
+		status = 3;
+	} else if (status == 5 || nd->status == 5) {
+		if (status != 5) {
+			tech = -1;
+			lac = nd->lac;
+			ci = nd->ci;
+		}
+		status = 5;
+	} else if (status == 1 || nd->status == 1) {
+		if (status != 1) {
+			tech = -1;
+			lac = nd->lac;
+			ci = nd->ci;
+		}
+		status = 1;
+	} else if (status == 2 || nd->status == 2) {
+		status = 2;
+	} else if (status == 3 || nd->status == 3) {
+		status = 3;
+	} else {
+		status = 0;
+	}
 
-	/* 6-10 is EUTRAN, with 8 being emergency bearer case */
-	if (status > 5 && tech == -1)
-		tech = ACCESS_TECHNOLOGY_EUTRAN;
+	nd->lac = -1;
+	nd->ci = -1;
+	nd->status =-1;
 
-	if(status!=1 && status!=5)
-		status=2; /* searching, do not report failures */
+	DBG("status %d lac 0x%02X ci 0x%02X tech %d", status, lac, ci, tech);
 
 	cb(&error, status, lac, ci, tech, cbd->data);
+}
+
+static void at_creg_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	ofono_netreg_status_cb_t cb = cbd->cb;
+	int status, lac, ci, tech;
+	struct ofono_error error;
+	struct netreg_data *nd = cbd->user;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	if (!ok) {
+		cb(&error, -1, -1, -1, -1, cbd->data);
+		g_free(cbd);
+		return;
+	}
+
+	if (at_util_parse_reg(result, "+CREG:", NULL, &status,
+				&lac, &ci, &tech, nd->vendor) == FALSE) {
+		CALLBACK_WITH_FAILURE(cb, -1, -1, -1, -1, cbd->data);
+		g_free(cbd);
+		return;
+	}
+
+	switch (nd->vendor)
+	{
+        case OFONO_VENDOR_GEMALTO_PLS8:
+        case OFONO_VENDOR_GEMALTO_PLS62:
+            nd->status = status;
+            if (status == 1 || status == 5) {
+                nd->lac = lac;
+                nd->ci = ci;
+            }
+            if (g_at_chat_send(nd->chat, "AT+CEREG?", cereg_prefix,
+                        cinterion_cereg_cb, cbd, g_free) == FALSE) {
+                CALLBACK_WITH_FAILURE(cb, -1, -1, -1, -1, cbd->data);
+                g_free(cbd);
+                return;
+            }
+            break;
+
+        default:
+            if ((status == 1 || status == 5) && (tech == -1))
+                tech = nd->tech;
+
+            /* 6-10 is EUTRAN, with 8 being emergency bearer case */
+            if (status > 5 && tech == -1)
+                tech = ACCESS_TECHNOLOGY_EUTRAN;
+
+            if(status!=1 && status!=5)
+                status=2; /* searching, do not report failures */
+
+            cb(&error, status, lac, ci, tech, cbd->data);
+            g_free(cbd);
+            break;
+	}
 }
 
 static void gemalto_query_tech_cb(gboolean ok, GAtResult *result,
@@ -357,7 +441,7 @@ static void at_registration_status(struct ofono_netreg *netreg,
 	}
 
 	if (g_at_chat_send(nd->chat, "AT+CREG?", creg_prefix,
-				at_creg_cb, cbd, g_free) > 0)
+				at_creg_cb, cbd, NULL) > 0)
 		return;
 
 	g_free(cbd);
@@ -1443,28 +1527,34 @@ static void at_signal_strength(struct ofono_netreg *netreg,
 
 	cbd->user = nd;
 
-	switch(nd->vendor) {
-	case OFONO_VENDOR_GEMALTO:
-		if (g_at_chat_send(nd->chat, "AT^SMONI", smoni_prefix,
-					smoni_query_cb, cbd, g_free) > 0)
-			return;
-		break;
-	case OFONO_VENDOR_ZTE_VANILLA:
-		break;
-	default:
-		/*
-		 * If we defaulted to using CIND, then keep using it,
-		 * otherwise fall back to CSQ
-		 */
-		if (nd->signal_index > 0) {
-			if (g_at_chat_send(nd->chat, "AT+CIND?", cind_prefix,
-						cind_cb, cbd, g_free) > 0)
-				return;
-		} else {
-			if (g_at_chat_send(nd->chat, "AT+CSQ", csq_prefix,
-					csq_cb, cbd, g_free) > 0)
-				return;
-		}
+	switch(nd->vendor)
+	{
+        case OFONO_VENDOR_GEMALTO:
+        case OFONO_VENDOR_GEMALTO_PLS8:
+        case OFONO_VENDOR_GEMALTO_PLS62:
+        case OFONO_VENDOR_GEMALTO_PLS63_PLS83:
+            if (g_at_chat_send(nd->chat, "AT^SMONI", smoni_prefix,
+                        smoni_query_cb, cbd, g_free) > 0)
+                return;
+            break;
+
+        case OFONO_VENDOR_ZTE_VANILLA:
+            break;
+
+        default:
+            /*
+             * If we defaulted to using CIND, then keep using it,
+             * otherwise fall back to CSQ
+             */
+            if (nd->signal_index > 0) {
+                if (g_at_chat_send(nd->chat, "AT+CIND?", cind_prefix,
+                            cind_cb, cbd, g_free) > 0)
+                    return;
+            } else {
+                if (g_at_chat_send(nd->chat, "AT+CSQ", csq_prefix,
+                        csq_cb, cbd, g_free) > 0)
+                    return;
+            }
 	}
 
 	g_free(cbd);
@@ -1731,19 +1821,112 @@ static void option_query_tech_cb(gboolean ok, GAtResult *result,
 			tq->status, tq->lac, tq->ci, tech);
 }
 
-static void creg_notify(GAtResult *result, gpointer user_data)
+static void cinterion_query_cereg_cb(gboolean ok, GAtResult *result,
+						gpointer user_data)
+{
+	struct tech_query *tq = user_data;
+	struct netreg_data *nd = ofono_netreg_get_data(tq->netreg);
+	int status = 0, lac = 0, ci = 0, tech = 0;
+
+	if (ok) {
+		if (at_util_parse_reg(result, "+CEREG:", NULL, &status,
+				&lac, &ci, &tech, nd->vendor) == FALSE)
+			return;
+
+		if (nd->vendor == OFONO_VENDOR_GEMALTO_PLS62 &&
+			(status == 3 || nd->status == 3)) {
+			/* For PLS62 only, make of denied event the top priority */
+			status = 3;
+		} else if (status == 5 || tq->status == 5) {
+			if (status != 5) {
+				tech = -1;
+				lac = tq->lac;
+				lac = tq->ci;
+			}
+			status = 5;
+		} else if (status == 1 || tq->status == 1) {
+			if (status != 1) {
+				tech = -1;
+				lac = tq->lac;
+				ci = tq->ci;
+			}
+			status = 1;
+		} else if (status == 2 || tq->status == 2) {
+			status = 2;
+		} else if (status == 3 || tq->status == 3) {
+			status = 3;
+		} else {
+			status = 0;
+		}
+	} else {
+		tech = -1;
+	}
+
+	DBG("status %d lac 0x%02X ci 0x%02X tech %d", status, lac, ci, tech);
+
+	ofono_netreg_status_notify(tq->netreg,
+			status, lac, ci, tech);
+}
+
+static void cinterion_query_creg_cb(gboolean ok, GAtResult *result,
+						gpointer user_data)
+{
+	struct tech_query *tq = user_data;
+	struct netreg_data *nd = ofono_netreg_get_data(tq->netreg);
+	int status = 0, lac = 0, ci = 0, tech = 0;
+
+	if (ok) {
+		if (at_util_parse_reg(result, "+CREG:", NULL, &status,
+				&lac, &ci, &tech, nd->vendor) == FALSE)
+			return;
+
+		if (nd->vendor == OFONO_VENDOR_GEMALTO_PLS62 &&
+			(status == 3 || nd->status == 3)) {
+			/* For PLS62 only, make of denied event the top priority */
+			status = 3;
+		} else if (status == 5 || tq->status == 5) {
+			if (status != 5) {
+				lac = tq->lac;
+				ci = tq->ci;
+				tech = tq->tech;
+			}
+			status = 5;
+		} else if (status == 1 || tq->status == 1) {
+			if (status != 1) {
+				lac = tq->lac;
+				ci = tq->ci;
+				tech = tq->tech;
+			}
+			status = 1;
+		} else if (status == 2 || tq->status == 2) {
+			status = 2;
+		} else if (status == 3 || tq->status == 3) {
+			status = 3;
+		} else {
+			status = 0;
+		}
+	} else {
+		tech = -1;
+	}
+
+	DBG("status %d lac 0x%02X ci 0x%02X tech %d", status, lac, ci, tech);
+
+	ofono_netreg_status_notify(tq->netreg,
+			status, lac, ci, tech);
+}
+
+static void cereg_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_netreg *netreg = user_data;
 	int status, lac, ci, tech;
 	struct netreg_data *nd = ofono_netreg_get_data(netreg);
 	struct tech_query *tq;
 
-	if (at_util_parse_reg_unsolicited(result, "+CREG:", &status,
+	DBG("");
+
+	if (at_util_parse_reg_unsolicited(result, "+CEREG:", &status,
 				&lac, &ci, &tech, nd->vendor) == FALSE)
 		return;
-
-	if (status != 1 && status != 5)
-		goto notify;
 
 	tq = g_try_new0(struct tech_query, 1);
 	if (tq == NULL)
@@ -1752,6 +1935,93 @@ static void creg_notify(GAtResult *result, gpointer user_data)
 	tq->status = status;
 	tq->lac = lac;
 	tq->ci = ci;
+	tq->tech = tech;
+	tq->netreg = netreg;
+
+	if (g_at_chat_send(nd->chat, "AT+CREG?",
+				creg_prefix,
+				cinterion_query_creg_cb, tq, g_free) > 0)
+		return;
+
+	g_free(tq);
+
+	if ((status == 1 || status == 5) && tech == -1)
+		tech = nd->tech;
+
+notify:
+	ofono_netreg_status_notify(netreg, status, lac, ci, tech);
+}
+
+static void cgreg_notify(GAtResult *result, gpointer user_data)
+{
+	struct ofono_netreg *netreg = user_data;
+	int status, lac, ci, tech;
+	struct netreg_data *nd = ofono_netreg_get_data(netreg);
+	struct tech_query *tq;
+
+	DBG("");
+
+	if (at_util_parse_reg_unsolicited(result, "+CGREG:", &status,
+				&lac, &ci, &tech, nd->vendor) == FALSE)
+		return;
+
+	tq = g_try_new0(struct tech_query, 1);
+	if (tq == NULL)
+		goto notify;
+
+	tq->status = status;
+	tq->lac = lac;
+	tq->ci = ci;
+	tq->tech = tech;
+	tq->netreg = netreg;
+
+	if (g_at_chat_send(nd->chat, "AT+CREG?",
+				creg_prefix,
+				cinterion_query_creg_cb, tq, g_free) > 0)
+		return;
+
+	g_free(tq);
+
+	if ((status == 1 || status == 5) && tech == -1)
+		tech = nd->tech;
+
+notify:
+	ofono_netreg_status_notify(netreg, status, lac, ci, tech);
+}
+
+static void creg_notify(GAtResult *result, gpointer user_data)
+{
+	struct ofono_netreg *netreg = user_data;
+	int status, lac, ci, tech;
+	struct netreg_data *nd = ofono_netreg_get_data(netreg);
+	struct tech_query *tq;
+
+	DBG("");
+
+	if (at_util_parse_reg_unsolicited(result, "+CREG:", &status,
+				&lac, &ci, &tech, nd->vendor) == FALSE)
+		return;
+
+	switch (nd->vendor)
+	{
+        case OFONO_VENDOR_GEMALTO_PLS8:
+        case OFONO_VENDOR_GEMALTO_PLS62:
+            break;
+
+        default:
+            if (status != 1 && status != 5)
+                goto notify;
+            break;
+	}
+
+	tq = g_try_new0(struct tech_query, 1);
+	if (tq == NULL)
+		goto notify;
+
+	tq->status = status;
+	tq->lac = lac;
+	tq->ci = ci;
+	tq->tech = tech;
 	tq->netreg = netreg;
 
 	if ((status == 1 || status == 5) && tech == -1)
@@ -1779,7 +2049,15 @@ static void creg_notify(GAtResult *result, gpointer user_data)
 					option_query_tech_cb, tq, g_free) > 0)
 			return;
 		break;
+	case OFONO_VENDOR_GEMALTO_PLS8:
+	case OFONO_VENDOR_GEMALTO_PLS62:
+		if (g_at_chat_send(nd->chat, "AT+CEREG?",
+					cereg_prefix,
+					cinterion_query_cereg_cb, tq, g_free) > 0)
+			return;
+		break;
 	case OFONO_VENDOR_GEMALTO:
+	case OFONO_VENDOR_GEMALTO_PLS63_PLS83:
 		if (tech!=-1)
 			break;  /* technology already returned by +CREG, so run the notify label */
 		if (g_at_chat_send(nd->chat, "AT^SMONI",
@@ -2276,6 +2554,9 @@ static void at_creg_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
 						NULL, NULL, NULL);
 		break;
 	case OFONO_VENDOR_GEMALTO:
+	case OFONO_VENDOR_GEMALTO_PLS8:
+	case OFONO_VENDOR_GEMALTO_PLS62:
+    case OFONO_VENDOR_GEMALTO_PLS63_PLS83:
 		/*
 		 * We can't set rssi bounds from Gemalto responses
 		 * so set them up to specified values here
@@ -2295,6 +2576,13 @@ static void at_creg_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
 		g_at_chat_register(nd->chat, "+CESQ:", cesq_notify, FALSE, netreg, NULL); /* Register for +CESQ */
 		manage_csq_source(netreg, TRUE); /* start periodic polling of CSQ/CESQ */
 		g_at_chat_send(nd->chat, "AT^SIND=\"ceer\",1,99", none_prefix, NULL, NULL, NULL); /* Activate reject cause report */
+		/* Enable & Register for network registration status */
+		g_at_chat_register(nd->chat, "+CEREG:",
+						   cereg_notify, FALSE, netreg, NULL);
+		g_at_chat_register(nd->chat, "+CGREG:",
+						   cgreg_notify, FALSE, netreg, NULL);
+		g_at_chat_send(nd->chat, "AT+CEREG=2", none_prefix,
+						NULL, NULL, NULL);
 		break;
 	case OFONO_VENDOR_ZTE_VANILLA:
 		nd->signal_min = 0;
@@ -2328,7 +2616,6 @@ void manage_csq_source(struct ofono_netreg *netreg, gboolean add)
 	if(add)
 		nd->csq_source = g_timeout_add_seconds(5, gemalto_csq_query, netreg);
 }
-
 
 static void at_creg_test_cb(gboolean ok, GAtResult *result, gpointer user_data)
 {

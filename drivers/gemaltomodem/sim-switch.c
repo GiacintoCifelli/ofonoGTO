@@ -198,8 +198,6 @@ static int gemalto_sim_switch_probe(struct ofono_sim_switch *sm, unsigned int ve
 	struct sim_switch_data *smd;
 	GAtChat *chat = data;
 
-	DBG("");
-
 	smd = g_try_new0(struct sim_switch_data, 1);
 	if (smd == NULL)
 		return -ENOMEM;
@@ -208,7 +206,7 @@ static int gemalto_sim_switch_probe(struct ofono_sim_switch *sm, unsigned int ve
 
 	/* PLS83 has different SIM CS command, so let's check this out */
 	if(vendor == OFONO_VENDOR_GEMALTO_PLS63_PLS83) {
-		DBG("Enabling Gemalto PLS83 SIM CS workaround");
+		DBG("Enabling Gemalto PLS63/PLS83 SIM CS workaround");
 		smd->use_sim_text_for_cs = TRUE;
 	}
 

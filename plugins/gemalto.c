@@ -3238,10 +3238,6 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 	if (mw)
 		ofono_message_waiting_register(mw);
 
-	data->netreg = ofono_netreg_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
-
-	ofono_cbs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
-
 	vendor = OFONO_VENDOR_GEMALTO;
 	if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS8_ALS3)
 		vendor = OFONO_VENDOR_GEMALTO_PLS8;
@@ -3249,6 +3245,11 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 		vendor = OFONO_VENDOR_GEMALTO_PLS62;
 	else if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS63_PLS83)
 		vendor = OFONO_VENDOR_GEMALTO_PLS63_PLS83;
+
+	data->netreg = ofono_netreg_create(modem, vendor, "atmodem", data->app);
+
+	ofono_cbs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
+
 	ofono_radio_settings_create(modem, vendor, "gemaltomodem", data->app);
 }
 
