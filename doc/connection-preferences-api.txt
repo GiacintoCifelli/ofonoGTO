@@ -1,0 +1,71 @@
+ConnectionPreferences hierarchy
+===============
+
+Service		org.ofono
+Interface	org.ofono.ConnectionPreferences
+Object path	[variable prefix]/{modem0,modem1,...}
+
+Methods		dict GetProperties()
+
+			Returns ConnectionPreferences properties for the modem object. See
+			the properties section for available properties.
+
+		void SetProperty(string property, variant value)
+
+			Sets the given property value to that specified in
+			call parameter.
+
+			Possible Errors: [service].Error.InProgress
+					 [service].Error.NotImplemented
+					 [service].Error.InvalidArguments
+					 [service].Error.Failed
+
+		void SetContextProfile(uint cid, string apn, string type)
+
+			Set a context profile in the modem.
+				cid: Context id [1 - 16]
+				apn: Acces Point Name, empty string to clear
+				type: "ip", "ipv6" and "ipv4v6"
+
+			The cid '1' is used by PLS8 and PLS62 modems as default bearer
+			for LTE registration.
+
+			Possible Errors: [service].Error.InProgress
+					 [service].Error.NotImplemented
+					 [service].Error.InvalidArguments
+					 [service].Error.Failed
+
+Signals		PropertyChanged(string name, variant value)
+
+			This signal indicates a changed value of the given
+			property.
+
+Properties	string DefaultContext[readwrite]
+
+			Contains the context profile id to be activated for data access.
+			" [0 - 16]"
+
+			If it is equal to 0 (its default value), cid will not be forced
+			and the property will not be printed by GetProperties method
+
+		array{string} ContextProfiles[readonly]
+
+			Contains the context profiles stored in the modem (CGDCONT)
+				"cid1,apn1,type1"
+				"cid2,apn2,type2"
+				...
+
+		string BIPServerIPAddress[readonly]
+
+			Contains the IP address of the module after establishing
+			connection with BIP server.
+
+			Only displayed on modules that supports euicc.
+			It will report "0.0.0.0" if no connection was established
+
+		boolean IMSAutoconnect[readwrite]
+
+			Contains the IMS status.
+
+			It can be used to enable or disable the IMS registration
+			attempt after LTE attach.

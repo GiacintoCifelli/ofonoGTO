@@ -68,6 +68,7 @@ extern "C" {
 #define OFONO_LTE_INTERFACE OFONO_SERVICE ".LongTermEvolution"
 #define OFONO_IMS_INTERFACE OFONO_SERVICE ".IpMultimediaSystem"
 #define OFONO_SIM_SWITCH_INTERFACE OFONO_SERVICE ".SimSwitch"
+#define OFONO_CONNPREF_INTERFACE OFONO_SERVICE ".ConnectionPreferences"
 
 /* CDMA Interfaces */
 #define OFONO_CDMA_VOICECALL_MANAGER_INTERFACE "org.ofono.cdma.VoiceCallManager"

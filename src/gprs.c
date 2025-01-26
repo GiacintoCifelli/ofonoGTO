@@ -1259,6 +1259,7 @@ static DBusMessage *pri_set_property(DBusConnection *conn,
 	const char *property;
 	dbus_bool_t value;
 	const char *str;
+	guint16 default_cid;
 
 	if (!dbus_message_iter_init(msg, &iter))
 		return __ofono_error_invalid_args(msg);
@@ -1303,6 +1304,11 @@ static DBusMessage *pri_set_property(DBusConnection *conn,
 		gc = ctx->context_driver;
 
 		ctx->pending = dbus_message_ref(msg);
+
+		/* Force cid if default context is set */
+		default_cid = ofono_connpref_get_default_context(); // TODO: FIX ME!
+		if (default_cid > 0)
+			ctx->context.cid = default_cid;
 
 		ofono_info("cid '%u' will be %sactivated", ctx->context.cid, value ? "" : "de");
 

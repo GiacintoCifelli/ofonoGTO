@@ -70,6 +70,7 @@
 #include <src/actia/sim-switch.h>
 #include <src/actia/default-properties.h>
 #include <src/actia/vendor.h>
+#include <src/actia/conn-pref.h>
 
 /* debug utilities - begin */
 
