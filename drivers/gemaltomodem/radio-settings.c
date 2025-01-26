@@ -230,8 +230,10 @@ static void gemalto_set_rat_mode_cops(struct radio_settings_data *rsd,
 		value = 2;
 		break;
 	case OFONO_RADIO_ACCESS_MODE_LTE:
-		if (rsd->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS8_ALS3)
+		if ((rsd->vendor == OFONO_VENDOR_GEMALTO_PLS8) ||
+            (rsd->vendor == OFONO_VENDOR_GEMALTO_PLS63_PLS83)) {
 			value = 7;
+	    }
 		else
 			goto error;
 	}
@@ -266,7 +268,7 @@ static void gemalto_set_rat_mode(struct ofono_radio_settings *rs,
 
 	DBG("");
 
-	if (rsd->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS62) {
+	if (rsd->vendor == OFONO_VENDOR_GEMALTO_PLS62) {
 		gemalto_set_rat_mode_sxrat(rsd, mode, cbd);
 	} else {
 		gemalto_set_rat_mode_cops(rsd, mode, cbd);
