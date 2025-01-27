@@ -3023,6 +3023,11 @@ static void gemalto_pre_sim(struct ofono_modem *modem)
 	DBG("%p", modem);
 	gemalto_exec_stored_cmd(modem, "pre_sim");
 
+	if (!data) {
+		ofono_error("Unable to retrieve data from modem");
+		return;
+	}
+
 	if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS63_PLS83) {
 		vendor = OFONO_VENDOR_GEMALTO_PLS63_PLS83;
 	}
