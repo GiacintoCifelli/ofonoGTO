@@ -103,7 +103,7 @@ void ofono_connpref_remove(struct ofono_connpref *cp);
 void ofono_connpref_set_data(struct ofono_connpref *cp, void *data);
 void *ofono_connpref_get_data(struct ofono_connpref *cp);
 
-guint16 ofono_connpref_get_default_context();
+guint16 ofono_connpref_get_default_context(struct ofono_connpref *connpref);
 void ofono_connpref_set_default_context(struct ofono_connpref *connpref, guint16 cid);
 #ifdef __cplusplus
 }

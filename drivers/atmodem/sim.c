@@ -262,7 +262,7 @@ static void at_crsm_read_cb(gboolean ok, GAtResult *result,
 		return;
 	}
 
-	DBG("crsm_read_cb: %02x, %02x, %d", sw1, sw2, len);
+	/*DBG("crsm_read_cb: %02x, %02x, %d", sw1, sw2, len); */
 
 	cb(&error, response, len, cbd->data);
 }
@@ -524,7 +524,7 @@ static void at_sind_euiccid_read_cb(gboolean ok, GAtResult *result, gpointer use
 		goto error;
 
 	/* euccid can be returned empty without error */
-	if (!strlen(euccid)) 
+	if (!strlen(euccid))
 		goto error;
 
 	DBG("eUICCID: %s", euccid);

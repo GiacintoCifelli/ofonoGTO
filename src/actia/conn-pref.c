@@ -18,7 +18,6 @@
 #include "util.h"
 
 static GSList *g_drivers = NULL;
-static guint16 default_cid;
 
 struct ofono_connpref {
 	DBusMessage                  *pending;
@@ -375,7 +374,6 @@ static DBusMessage *connpref_set_property(DBusConnection *conn, DBusMessage *msg
 			return dbus_message_new_method_return(msg);
 
 		connpref->default_cid = cid;
-		default_cid = cid;
 
 		if (connpref->driver->set_connpref_default_context) {
 			connpref->driver->set_connpref_default_context(connpref, cid);
@@ -517,7 +515,6 @@ struct ofono_connpref *ofono_connpref_create(struct ofono_modem *modem,
 		return NULL;
 
 	connpref->default_cid = 0; // DEFAULT: cid not forced
-	default_cid = 0;
 	connpref->contextprofiles_list = NULL;
 	connpref->ims_autoconnect = -1;
 	connpref->rpm = -1;
@@ -546,7 +543,6 @@ void ofono_connpref_register(struct ofono_connpref *connpref)
 	DBusConnection *conn = ofono_dbus_get_connection();
 	struct ofono_modem *modem = __ofono_atom_get_modem(connpref->atom);
 	const char *path = __ofono_atom_get_path(connpref->atom);
-	DBG("");
 	if (!g_dbus_register_interface(conn, path,
 	                               OFONO_CONNPREF_INTERFACE,
 	                               connpref_methods, connpref_signals,
@@ -577,16 +573,13 @@ void *ofono_connpref_get_data(struct ofono_connpref *connpref)
 	return connpref->driver_data;
 }
 
-guint16 ofono_connpref_get_default_context()
+guint16 ofono_connpref_get_default_context(struct ofono_connpref *connpref)
 {
-    /* TODO: we should use "connpref->default_cid" instead, but have no access to
-     * "struct ofono_connpref" at a place where "get_default_context()" is called
-     */
-	return default_cid;
+	return connpref->default_cid;
 }
 
 void ofono_connpref_set_default_context(struct ofono_connpref *connpref, guint16 cid)
 {
-	default_cid = cid;
+
 	connpref->default_cid = cid;
 }

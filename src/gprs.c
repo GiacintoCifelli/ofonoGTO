@@ -46,6 +46,7 @@
 #include "idmap.h"
 #include "simutil.h"
 #include "util.h"
+#include <src/actia/conn-pref.h>
 
 #define GPRS_FLAG_ATTACHING 0x1
 #define GPRS_FLAG_RECHECK 0x2
@@ -144,6 +145,7 @@ struct pri_context {
 static void gprs_attached_update(struct ofono_gprs *gprs);
 static void gprs_netreg_update(struct ofono_gprs *gprs);
 static void gprs_deactivate_next(struct ofono_gprs *gprs);
+static guint16 ofono_gprs_get_def_cid(struct ofono_gprs *gprs);
 
 static GSList *g_drivers = NULL;
 static GSList *g_context_drivers = NULL;
@@ -1306,7 +1308,7 @@ static DBusMessage *pri_set_property(DBusConnection *conn,
 		ctx->pending = dbus_message_ref(msg);
 
 		/* Force cid if default context is set */
-		default_cid = ofono_connpref_get_default_context(); // TODO: FIX ME!
+		default_cid = ofono_gprs_get_def_cid(ctx->gprs);
 		if (default_cid > 0)
 			ctx->context.cid = default_cid;
 
@@ -3482,3 +3484,17 @@ void *ofono_gprs_get_data(struct ofono_gprs *gprs)
 {
 	return gprs->driver_data;
 }
+
+static guint16 ofono_gprs_get_def_cid(struct ofono_gprs *gprs)
+{
+	guint16 def_cid = 0;
+	struct ofono_modem *modem = __ofono_atom_get_modem(gprs->atom);
+	struct ofono_connpref *connpref = __ofono_atom_find(OFONO_ATOM_TYPE_CONNPREF, modem);
+	/* connpref will not exist for non-gemalto modems */
+	if(connpref)
+	{
+		def_cid = ofono_connpref_get_default_context(connpref);
+	}
+	return def_cid;
+}
+

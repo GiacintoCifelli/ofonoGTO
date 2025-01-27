@@ -3039,11 +3039,17 @@ static void gemalto_pre_sim(struct ofono_modem *modem)
 		return;
 	}
 
-	if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS63_PLS83) {
+	if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS62) {
+		vendor = OFONO_VENDOR_GEMALTO_PLS62;
+	}
+	else if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS63_PLS83) {
 		vendor = OFONO_VENDOR_GEMALTO_PLS63_PLS83;
 	}
 	/* Create the sim switch */
 	ofono_sim_switch_create(modem, vendor, "gemaltomodem", data->app);
+
+	/* Create the connection preference */
+	ofono_connpref_create(modem, vendor, "gemaltomodem", data->app);
 
 	/* Retrieve Provider used by LTE and for the cid range */
 	g_at_chat_send(data->app, "AT^SCFG=\"MEopMode/Prov/Cfg\"", scfg_prefix,

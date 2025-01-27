@@ -20,7 +20,7 @@
 #include "gatchat.h"
 #include "gatresult.h"
 #include "gemaltomodem.h"
-#include "src/actia/vendor.h"
+#include <drivers/atmodem/vendor.h>
 
 static const char *cgdcont_prefix[] = { "+CGDCONT:", NULL };
 static const char *cgpaddr_prefix[] = { "+CGPADDR:", NULL };
@@ -199,8 +199,7 @@ static void gemalto_query_connpref_config_step2(struct cb_data *cbd,
 {
 	ofono_connpref_contextprofiles_query_cb_t cb = cbd->cb;
 	DBG("");
-	// TODO: change OFONO_VENDOR_GEMALTO_CINT_PLS62 to OFONO_VENDOR_GEMALTO_PLS62
-	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS62) {
+	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_PLS62) {
 		if (g_at_chat_send(cp_data->chat, "AT+CGPADDR", cgpaddr_prefix, gemalto_address_cb, cbd, NULL) == 0){
 			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list,NULL, -1, -1, -1, cbd->data);
 			g_free(cbd);
@@ -264,8 +263,7 @@ static void gemalto_query_connpref_config(struct ofono_connpref *connpref,
 	struct connpref_data *cp_data = ofono_connpref_get_data(connpref);
 
 	DBG("");
-	// TODO: change OFONO_VENDOR_GEMALTO_CINT_PLS83 -> OFONO_VENDOR_GEMALTO_PLS63_PLS83
-	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS83){
+	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_PLS63_PLS83){
 		if (g_at_chat_send(cp_data->chat, "AT^SINFO?", sinfo_prefix, gemalto_sinfo_cb, cbd, NULL) == 0) {
 			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list,NULL, -1, -1, -1, cbd->data);
 			g_free(cbd);
@@ -447,8 +445,7 @@ static void gemalto_set_rpm(struct ofono_connpref *connpref,
 	struct connpref_data *cp_data = ofono_connpref_get_data(connpref);
 	char buf[128];
 
-	// TODO: change OFONO_VENDOR_GEMALTO_CINT_PLS83 -> OFONO_VENDOR_GEMALTO_PLS63_PLS83
-	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS83){
+	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_PLS63_PLS83){
 		DBG("Set RPM : %d",rpm);
 		snprintf(buf, sizeof(buf),"AT^SCFG=\"MEopMode/RPM\",\"%i\"",rpm ? 2:0);
 		if (g_at_chat_send(cp_data->chat, buf, scfg_prefix,gemalto_rpm_set_cb, cbd, NULL) == 0){
@@ -480,8 +477,6 @@ static int gemalto_connpref_probe(struct ofono_connpref *connpref,
 	gchar* init_default_cid_str = NULL;
 	guint64 init_default_cid = 0;
 
-	DBG("");
-
 	cp_data = g_try_new0(struct connpref_data, 1);
 	if (cp_data == NULL)
 		return -ENOMEM;
@@ -508,8 +503,6 @@ static int gemalto_connpref_probe(struct ofono_connpref *connpref,
 static void gemalto_connpref_remove(struct ofono_connpref *connpref)
 {
 	struct connpref_data *cp_data = ofono_connpref_get_data(connpref);
-
-	DBG("");
 
 	ofono_connpref_set_data(connpref, NULL);
 	g_at_chat_unref(cp_data->chat);
