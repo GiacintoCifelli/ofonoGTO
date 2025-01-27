@@ -3170,7 +3170,7 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 			/* limitation: same APN as for attach */
 			ofono_gprs_set_cid_range(gprs, 1, 11);
 		else
-			ofono_gprs_set_cid_range(gprs, 4, 16);
+			ofono_gprs_set_cid_range(gprs, 6, 15);
 
 		if (data->gprs_opt == USE_CTX3 || data->model == 0x5b)
 			gc = ofono_gprs_context_create(modem, 0, "gemaltomodemswwanblocking", data->app);
