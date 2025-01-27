@@ -29,6 +29,7 @@ struct ofono_connpref {
 	struct                       ofono_atom *atom;
 	const struct                 ofono_connpref_driver *driver;
 	int                          ims_autoconnect;
+	int                          rpm;
 };
 
 static gboolean connpref_from_string_to_pdp_type(const char *str,
@@ -117,6 +118,26 @@ static void connpref_set_ims_autoconnect(struct ofono_connpref *connpref, int im
 	                                   DBUS_TYPE_BOOLEAN, &value);
 }
 
+static void connpref_set_rpm(struct ofono_connpref *connpref, int rpm)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+	const char *path;
+	dbus_bool_t value;
+
+	if (connpref->rpm == rpm)
+		return;
+
+	connpref->rpm = rpm;
+	value = rpm;
+
+	path = __ofono_atom_get_path(connpref->atom);
+
+	ofono_dbus_signal_property_changed(conn, path,
+	                                   OFONO_CONNPREF_INTERFACE,
+	                                   ACTIA_PRO_RPM,
+	                                   DBUS_TYPE_BOOLEAN, &value);
+}
+
 static DBusMessage *connpref_get_properties_reply(DBusMessage *msg,
                                                   struct ofono_connpref *connpref)
 {
@@ -157,6 +178,10 @@ static DBusMessage *connpref_get_properties_reply(DBusMessage *msg,
 	ofono_dbus_dict_append(&dict, ACTIA_PRO_IMSAUTOCONNECT,
 		                       DBUS_TYPE_BOOLEAN, &value);
 
+	value = connpref->rpm;
+	ofono_dbus_dict_append(&dict, ACTIA_PRO_RPM,
+		                       DBUS_TYPE_BOOLEAN, &value);
+
 	dbus_message_iter_close_container(&iter, &dict);
 
 	return reply;
@@ -167,12 +192,13 @@ static void connpref_config_query_callback(const struct ofono_error *error,
                                            char *bip_address_ip_str,
                                            int contextprofile_size,
                                            int ims_autoconnect,
+                                           int rpm,
                                            void *data)
 {
 	struct ofono_connpref *ofono_connpref = data;
 	DBusMessage *reply;
 
-	DBG("%p %s %d",contextprofiles_list, bip_address_ip_str, ims_autoconnect);
+	DBG("%p %s %d %d",contextprofiles_list, bip_address_ip_str, ims_autoconnect, rpm);
 
 	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
 		DBG("Error during config query");
@@ -188,6 +214,7 @@ static void connpref_config_query_callback(const struct ofono_error *error,
 	connpref_set_bip_address_ip(ofono_connpref, bip_address_ip_str);
 	connpref_set_context_profile_list(ofono_connpref, contextprofiles_list,contextprofile_size);
 	connpref_set_ims_autoconnect(ofono_connpref,ims_autoconnect);
+	connpref_set_rpm(ofono_connpref,rpm);
 
 	if (ofono_connpref->pending) {
 		reply = connpref_get_properties_reply(ofono_connpref->pending, ofono_connpref);
@@ -226,6 +253,26 @@ static void connpref_ims_set_callback(const struct ofono_error *error,
 
 		reply = __ofono_error_failed(connpref->pending);
 		__ofono_dbus_pending_reply(&connpref->pending, reply);
+		return;
+	}
+
+	reply = dbus_message_new_method_return(connpref->pending);
+	__ofono_dbus_pending_reply(&connpref->pending, reply);
+
+}
+
+static void connpref_rpm_set_callback(const struct ofono_error *error,
+                                              void *data)
+{
+	struct ofono_connpref *connpref = data;
+	DBusMessage *reply;
+
+	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
+		DBG("Error setting RPM property");
+
+		reply = __ofono_error_failed(connpref->pending);
+		__ofono_dbus_pending_reply(&connpref->pending, reply);
+
 		return;
 	}
 
@@ -363,6 +410,27 @@ static DBusMessage *connpref_set_property(DBusConnection *conn, DBusMessage *msg
 		return NULL;
 	}
 
+	/* RPM */
+	if (g_strcmp0(property, ACTIA_PRO_RPM) == 0) {
+		dbus_bool_t rpm;
+
+		if (dbus_message_iter_get_arg_type(&var) != DBUS_TYPE_BOOLEAN)
+			return __ofono_error_invalid_args(msg);
+
+		dbus_message_iter_get_basic(&var, &rpm);
+
+		if (connpref->driver->set_connpref_rpm == NULL)
+			return __ofono_error_not_implemented(msg);
+
+		connpref->rpm = rpm;
+
+		connpref->pending = dbus_message_ref(msg);
+
+		connpref->driver->set_connpref_rpm(connpref, rpm, connpref_rpm_set_callback, connpref);
+
+		return NULL;
+	}
+
 	return __ofono_error_invalid_args(msg);
 }
 
@@ -452,6 +520,7 @@ struct ofono_connpref *ofono_connpref_create(struct ofono_modem *modem,
 	default_cid = 0;
 	connpref->contextprofiles_list = NULL;
 	connpref->ims_autoconnect = -1;
+	connpref->rpm = -1;
 
 	connpref->atom = __ofono_modem_add_atom(modem, OFONO_ATOM_TYPE_CONNPREF,
 	                                        connpref_remove, connpref);

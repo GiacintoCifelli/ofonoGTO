@@ -32,6 +32,7 @@ extern "C" {
 #define ACTIA_PRO_CONTEXTROFILES "ContextProfiles"
 #define ACTIA_PRO_BIP_SERVER_IP_ADDRESS "BIPServerIPAddress"
 #define ACTIA_PRO_IMSAUTOCONNECT "IMSAutoconnect"
+#define ACTIA_PRO_RPM "RPM"
 
 #define OFONO_CONNPREF_PDP_TYPE_IP "ip"
 #define OFONO_CONNPREF_PDP_TYPE_IPV6 "ipv6"
@@ -57,6 +58,7 @@ typedef void (*ofono_connpref_contextprofiles_query_cb_t)(
                         char * bip_address_ip,
                         int contextprofile_size,
                         int ims_autoconnect,
+                        int rpm,
                         void *data);
 
 
@@ -77,6 +79,10 @@ struct ofono_connpref_driver {
 	                                     guint16 cid);
 	void (*set_connpref_ims_autoconnect)(struct ofono_connpref *connpref,
 	                                     ofono_bool_t ims_autoconnect,
+	                                     ofono_connpref_techno_set_cb_t cb,
+	                                     void *data);
+	void (*set_connpref_rpm)(struct ofono_connpref *connpref,
+	                                     ofono_bool_t rpm,
 	                                     ofono_connpref_techno_set_cb_t cb,
 	                                     void *data);
 };

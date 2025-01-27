@@ -25,6 +25,7 @@
 static const char *cgdcont_prefix[] = { "+CGDCONT:", NULL };
 static const char *cgpaddr_prefix[] = { "+CGPADDR:", NULL };
 static const char *scfg_prefix[] = { "^SCFG:", NULL };
+static const char *sinfo_prefix[] = { "^SINFO:", NULL };
 
 struct connpref_data {
 	GAtChat *chat;
@@ -33,6 +34,7 @@ struct connpref_data {
 	char *contextprofiles_list[16];
 	char address[64];
 	int contextprofile_size;
+	int rpm;
 };
 
 static void gemalto_ims_cb(gboolean ok, GAtResult *result,
@@ -63,12 +65,12 @@ static void gemalto_ims_cb(gboolean ok, GAtResult *result,
 		else
 			ims_autoconnect = 0 ;
 
-		CALLBACK_WITH_SUCCESS(cb, cp_data->contextprofiles_list, cp_data->address, cp_data->contextprofile_size, ims_autoconnect, cbd->data);
+		CALLBACK_WITH_SUCCESS(cb, cp_data->contextprofiles_list, cp_data->address, cp_data->contextprofile_size, ims_autoconnect, cp_data->rpm, cbd->data);
 		return;
 	}
 
 error:
-	CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, cbd->data);
+	CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, -1, cbd->data);
 }
 
 static void gemalto_cgdcont_cb(gboolean ok, GAtResult *result,
@@ -93,7 +95,7 @@ static void gemalto_cgdcont_cb(gboolean ok, GAtResult *result,
 	{
 		/*do not apply a strict check policy on fail*/
 		if (g_at_chat_send(cp_data->chat, "AT^SCFG=\"MEopMode/IMS\"",scfg_prefix, gemalto_ims_cb, cbd, g_free) == 0) {
-			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, cbd->data);
+			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, -1, cbd->data);
 			g_free(cbd);
 	}
 		return ;
@@ -129,13 +131,13 @@ static void gemalto_cgdcont_cb(gboolean ok, GAtResult *result,
 	cp_data->contextprofile_size = i;
 
 	if (g_at_chat_send(cp_data->chat, "AT^SCFG=\"MEopMode/IMS\"",scfg_prefix, gemalto_ims_cb, cbd, g_free) == 0) {
-		CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, cbd->data);
+		CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, -1, cbd->data);
 		g_free(cbd);
 	}
 	return;
 
 error:
-	CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, cbd->data);
+	CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, -1, cbd->data);
 }
 
 /* For PLS62 */
@@ -180,16 +182,78 @@ static void gemalto_address_cb(gboolean ok, GAtResult *result, gpointer user_dat
 	DBG("BIP server address: %s", cp_data->address);
 
 	if (g_at_chat_send(cp_data->chat, "AT+CGDCONT?", cgdcont_prefix, gemalto_cgdcont_cb, cbd, g_free) == 0) {
-		CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, cbd->data);
+		CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, -1, cbd->data);
 		g_free(cbd);
 	}
 
 	return;
 
 error:
-	CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, cbd->data);
+	CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, -1, cbd->data);
 	g_free(cbd);
 
+}
+
+static void gemalto_query_connpref_config_step2(struct cb_data *cbd,
+												struct connpref_data *cp_data)
+{
+	ofono_connpref_contextprofiles_query_cb_t cb = cbd->cb;
+	DBG("");
+	// TODO: change OFONO_VENDOR_GEMALTO_CINT_PLS62 to OFONO_VENDOR_GEMALTO_PLS62
+	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS62) {
+		if (g_at_chat_send(cp_data->chat, "AT+CGPADDR", cgpaddr_prefix, gemalto_address_cb, cbd, NULL) == 0){
+			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list,NULL, -1, -1, -1, cbd->data);
+			g_free(cbd);
+		}
+	} else {
+		if (g_at_chat_send(cp_data->chat, "AT+CGDCONT?", cgdcont_prefix, gemalto_cgdcont_cb, cbd, NULL) == 0) {
+			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list,NULL, -1, -1, -1, cbd->data);
+			g_free(cbd);
+		}
+	}
+}
+
+static void gemalto_sinfo_cb(gboolean ok, GAtResult *result,
+                               gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	struct ofono_error error;
+	struct ofono_connpref *connpref =  cbd->data;
+	struct connpref_data *cp_data = ofono_connpref_get_data(connpref);
+	ofono_connpref_contextprofiles_query_cb_t cb = cbd->cb;
+	const char *str_value ;
+	GAtResultIter iter;
+
+	DBG("");
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	if (!ok)
+	{
+		CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, -1, cbd->data);
+		g_free(cbd);
+		return ;
+	}
+	g_at_result_iter_init(&iter, result);
+	if (!g_at_result_iter_next(&iter,"^SINFO:"))
+		goto error;
+	if (!g_at_result_iter_skip_next(&iter))
+		goto error;
+	if (!g_at_result_iter_next_string(&iter, &str_value))
+		goto error;
+
+	if (g_str_equal(str_value, "1"))
+			cp_data->rpm= 1 ;
+	else
+			cp_data->rpm= 0 ;
+
+	DBG("RPM enable : %d",cp_data->rpm);
+	gemalto_query_connpref_config_step2(cbd,cp_data);
+	return;
+
+error:
+	CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list, NULL, -1, -1, -1, cbd->data);
+	g_free(cbd);
 }
 
 static void gemalto_query_connpref_config(struct ofono_connpref *connpref,
@@ -200,16 +264,15 @@ static void gemalto_query_connpref_config(struct ofono_connpref *connpref,
 	struct connpref_data *cp_data = ofono_connpref_get_data(connpref);
 
 	DBG("");
-	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS62) {
-		if (g_at_chat_send(cp_data->chat, "AT+CGPADDR", cgpaddr_prefix, gemalto_address_cb, cbd, NULL) == 0){
-			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list,NULL, -1, -1, cbd->data);
+	// TODO: change OFONO_VENDOR_GEMALTO_CINT_PLS83 -> OFONO_VENDOR_GEMALTO_PLS63_PLS83
+	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS83){
+		if (g_at_chat_send(cp_data->chat, "AT^SINFO?", sinfo_prefix, gemalto_sinfo_cb, cbd, NULL) == 0) {
+			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list,NULL, -1, -1, -1, cbd->data);
 			g_free(cbd);
 		}
 	} else {
-		if (g_at_chat_send(cp_data->chat, "AT+CGDCONT?", cgdcont_prefix, gemalto_cgdcont_cb, cbd, NULL) == 0) {
-			CALLBACK_WITH_FAILURE(cb, cp_data->contextprofiles_list,NULL, -1, -1, cbd->data);
-			g_free(cbd);
-		}
+		cp_data->rpm = FALSE;
+		gemalto_query_connpref_config_step2(cbd,cp_data);
 	}
 }
 
@@ -245,6 +308,65 @@ static void gemalto_ims_set_cb(gboolean ok, GAtResult *result,
 	decode_at_error(&error, g_at_result_final_response(result));
 
 	cb(&error, cbd->data);
+}
+
+static void gemalto_srpom_set_cb(gboolean ok, GAtResult *result,
+                                   gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	struct ofono_error error;
+	ofono_connpref_techno_set_cb_t cb = cbd->cb;
+
+	DBG("");
+
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	cb(&error, cbd->data);
+}
+
+static void gemalto_rpm_set_cb(gboolean ok, GAtResult *result,
+                                   gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	struct ofono_error error;
+	ofono_connpref_techno_set_cb_t cb = cbd->cb;
+	struct ofono_connpref *connpref =  cbd->data;
+	struct connpref_data *cp_data = ofono_connpref_get_data(connpref);
+	char buf[128];
+	GAtResultIter iter;
+	const char *value;
+
+	DBG("");
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	if (!ok)
+		goto error;
+
+	g_at_result_iter_init(&iter, result);
+	if (!g_at_result_iter_next(&iter, "^SCFG: \"MEopMode/RPM\","))
+		goto error;
+
+	if (!g_at_result_iter_next_string(&iter, &value))
+		goto error;
+
+	if (g_str_equal(value, "2")) {
+		/*
+		* SRPOM also need to be enable to activate RPM.
+		* There is no need to disable SRPOM when desactive RPM since
+		* it is already done by AT^SCFG="MEopMode/RPM","0"
+		*/
+		snprintf(buf, sizeof(buf),"AT^SCFG=\"MEopMode/SRPOM\",\"1\"");
+		if (g_at_chat_send(cp_data->chat, buf, scfg_prefix,gemalto_srpom_set_cb, cbd, g_free) == 0){
+			goto error;
+		}
+	} else {
+		cb(&error, cbd->data);
+		g_free(cbd);
+	}
+	return;
+error:
+	CALLBACK_WITH_FAILURE(cb, cbd->data);
+	g_free(cbd);
 }
 
 static char * gemalto_from_pdp_type_to_string(const enum ofono_connpref_is_pdp_type pdp_type)
@@ -316,6 +438,29 @@ static void gemalto_set_ims_autoconnect(struct ofono_connpref *connpref,
 	}
 }
 
+static void gemalto_set_rpm(struct ofono_connpref *connpref,
+							ofono_bool_t rpm,
+							ofono_connpref_techno_set_cb_t cb,
+							void *data)
+{
+	struct cb_data *cbd = cb_data_new(cb, data);
+	struct connpref_data *cp_data = ofono_connpref_get_data(connpref);
+	char buf[128];
+
+	// TODO: change OFONO_VENDOR_GEMALTO_CINT_PLS83 -> OFONO_VENDOR_GEMALTO_PLS63_PLS83
+	if (cp_data->vendor == OFONO_VENDOR_GEMALTO_CINT_PLS83){
+		DBG("Set RPM : %d",rpm);
+		snprintf(buf, sizeof(buf),"AT^SCFG=\"MEopMode/RPM\",\"%i\"",rpm ? 2:0);
+		if (g_at_chat_send(cp_data->chat, buf, scfg_prefix,gemalto_rpm_set_cb, cbd, NULL) == 0){
+			CALLBACK_WITH_FAILURE(cb, cbd->data);
+			g_free(cbd);
+		}
+	} else {
+		CALLBACK_WITH_FAILURE(cb, cbd->data);
+		g_free(cbd);
+	}
+}
+
 static void gemalto_set_connpref_default_context(struct ofono_connpref *connpref,
                                                  guint16 cid)
 {
@@ -379,6 +524,7 @@ static struct ofono_connpref_driver driver = {
 	.set_connpref_context_profile = gemalto_set_connpref_context_profile,
 	.set_connpref_default_context = gemalto_set_connpref_default_context,
 	.set_connpref_ims_autoconnect = gemalto_set_ims_autoconnect,
+	.set_connpref_rpm             = gemalto_set_rpm,
 };
 
 void gemalto_connpref_init(void)
