@@ -169,6 +169,11 @@ static void gemalto_address_cb(gboolean ok, GAtResult *result, gpointer user_dat
 	if (!g_at_result_iter_next_string(&iter, &address))
 		goto error;
 
+	if (strlen(address) >= sizeof(cp_data->address)) {
+		ofono_error("Retrieved address is too long");
+		goto error;
+	}
+
 	strncpy(cp_data->address, address, sizeof(cp_data->address) - 1);
 	cp_data->address[sizeof(cp_data->address) - 1] = '\0';
 
