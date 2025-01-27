@@ -220,6 +220,7 @@ struct gemalto_data {
 	/* hardware control variables */
 	DBusMessage *hc_msg;
 	gboolean powersave;
+	gboolean is_online_ongoing;
 };
 
 /*******************************************************************************
@@ -2973,6 +2974,11 @@ static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
 
 	cbd->user = modem;
 
+	if (!online && data->is_online_ongoing){
+		ofono_error("Cannot set offline, online process on going");
+		goto error;
+	}
+
 	if (data->conn == GEMALTO_CONNECTION_SERIAL) {
 		gemalto_set_online_serial(modem, online, cb, user_data);
 		return;
@@ -2985,9 +2991,13 @@ static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
 	else
 		gemalto_exec_stored_cmd(modem, "set_offline");
 
-	if (g_at_chat_send(data->app, cmd, NULL, set_online_cb, cbd, g_free))
+	if (g_at_chat_send(data->app, cmd, NULL, set_online_cb, cbd, g_free)){
+		if (online)
+			data->is_online_ongoing = TRUE;
 		return;
+	}
 
+error:
 	CALLBACK_WITH_FAILURE(cb, cbd->data);
 	g_free(cbd);
 }
@@ -3257,6 +3267,8 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 	ofono_cbs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
 
 	ofono_radio_settings_create(modem, vendor, "gemaltomodem", data->app);
+
+	data->is_online_ongoing = FALSE;	//Online finish
 }
 
 static void sw_reset_cb(gboolean ok, GAtResult *result, gpointer user_data)
