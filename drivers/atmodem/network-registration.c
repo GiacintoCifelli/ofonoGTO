@@ -1458,7 +1458,7 @@ static void smoni_query_cb(gboolean ok, GAtResult *result, gpointer user_data)
 	ofono_netreg_strength_cb_t cb = cbd->cb;
 	struct ofono_error error;
 	GAtResultIter iter;
-	int strength = 0;
+	int strength = -1;
 	GSList *l;
 
 	decode_at_error(&error, g_at_result_final_response(result));
@@ -1470,9 +1470,12 @@ static void smoni_query_cb(gboolean ok, GAtResult *result, gpointer user_data)
 
 	g_at_result_iter_init(&iter, result);
 
-	if (!g_at_result_iter_next(&iter, "^SMONI:"))
+	if (!g_at_result_iter_next(&iter, "^SMONI:")) {
+		error.type = OFONO_ERROR_TYPE_FAILURE;
+		error.error = 0;
+		cb(&error, -1, cbd->data);
 		return;
-
+	}
 	DBG("");
 
 	l = result->lines;

@@ -122,7 +122,13 @@ static void rat_modify_mode_cb(gboolean ok, GAtResult *result,
 	ofono_radio_settings_rat_mode_set_cb_t cb = cbd->cb;
 	struct ofono_error error;
 
-	decode_at_error(&error, g_at_result_final_response(result));
+	if (result == NULL) {
+		ofono_error("Final response pointer is NULL");
+		error.type = OFONO_ERROR_TYPE_FAILURE;
+		error.error = 0;
+	} else {
+		decode_at_error(&error, g_at_result_final_response(result));
+	}
 	cb(&error, cbd->data);
 }
 
@@ -145,7 +151,7 @@ static void cops_get_and_set_mode_cb(gboolean ok, GAtResult *result,
 	DBG("");
 	if (user_data == NULL){
 		DBG("error user_data==NULL");
-		goto error;
+		return;
 	}
 	rcbd = user_data;
 	cb = rcbd->cbd->cb;
@@ -166,11 +172,14 @@ static void cops_get_and_set_mode_cb(gboolean ok, GAtResult *result,
 		{
 			goto error;
 		}
+		return;
 	}
+	cb(&error, rcbd->cbd->data);
+	g_free(rcbd->cbd);
 	return;
 error:
 	CALLBACK_WITH_FAILURE(cb, rcbd->cbd->data);
-	g_free(rcbd);
+	g_free(rcbd->cbd);
 }
 
 static void gemalto_set_rat_mode_sxrat(struct radio_settings_data *rsd,
@@ -212,12 +221,7 @@ static void gemalto_set_rat_mode_cops(struct radio_settings_data *rsd,
 	int value = 2;
 	char buf[40];
 	ofono_radio_settings_rat_mode_set_cb_t cb = cbd->cb;
-	struct radio_cb_data * rcbd=malloc(sizeof(struct radio_cb_data));
-	if (rcbd == NULL){
-		goto error;
-	}
-	rcbd->rsd = rsd;
-	rcbd->cbd = cbd;
+	struct radio_cb_data * rcbd;
 	DBG("");
 	switch (mode) {
 	case OFONO_RADIO_ACCESS_MODE_ANY:
@@ -238,9 +242,16 @@ static void gemalto_set_rat_mode_cops(struct radio_settings_data *rsd,
 			goto error;
 	}
 	if (value == -1) {
+		rcbd = malloc(sizeof(struct radio_cb_data));
+		if (rcbd == NULL){
+			goto error;
+		}
+		rcbd->rsd = rsd;
+		rcbd->cbd = cbd;
 		if (g_at_chat_send(rsd->chat, "AT+COPS?", cops_prefix,
 							cops_get_and_set_mode_cb, rcbd, g_free) == 0)
 		{
+			g_free(rcbd);
 			goto error;
 		}
 	} else {
@@ -248,7 +259,6 @@ static void gemalto_set_rat_mode_cops(struct radio_settings_data *rsd,
 		if (g_at_chat_send(rsd->chat, buf, none_prefix,
 							rat_modify_mode_cb, cbd, g_free) <= 0)
 			goto error;
-		g_free(rcbd);
 	}
 	return;
 

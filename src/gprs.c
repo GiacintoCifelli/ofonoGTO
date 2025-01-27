@@ -1304,6 +1304,8 @@ static DBusMessage *pri_set_property(DBusConnection *conn,
 
 		ctx->pending = dbus_message_ref(msg);
 
+		ofono_info("cid '%u' will be %sactivated", ctx->context.cid, value ? "" : "de");
+
 		if (value)
 			gc->driver->activate_primary(gc, &ctx->context,
 						pri_activate_callback, ctx);
