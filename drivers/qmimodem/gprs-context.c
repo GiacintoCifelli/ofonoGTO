@@ -729,6 +729,23 @@ static void create_wds_cb(struct qmi_service *service, void *user_data)
 	wds_set_ip_family_pref(gc);
 }
 
+static void set_data_format_cb(struct qmi_result *result, void *user_data)
+{
+	struct ofono_gprs_context *gc = user_data;
+	struct gprs_context_data *data = ofono_gprs_context_get_data(gc);
+	uint16_t error;
+	DBG("");
+
+	qmi_result_set_error(result, &error);
+	if (error) {
+		DBG("Failed to set data format");
+	}
+
+	data->ip_family = QMI_WDS_IP_FAMILY_IPV4;
+	qmi_service_create_shared_ex(data->dev, QMI_SERVICE_WDS, 4, create_wds_cb, gc,
+									NULL);
+}
+
 static void get_data_format_cb(struct qmi_result *result, void *user_data)
 {
 	struct ofono_gprs_context *gc = user_data;
@@ -783,10 +800,27 @@ static void create_wda_cb(struct qmi_service *service, void *user_data)
 	}
 
 	data->wda = qmi_service_ref(service);
+	if (getenv("OFONO_QMI_ALS3X")) {
+		struct qmi_param *param;
 
-	if (qmi_service_send(data->wda, QMI_WDA_GET_DATA_FORMAT, NULL,
-					get_data_format_cb, gc, NULL) > 0)
-		return;
+		/* Set format to raw ip then get format (in set_data_format_cb method) */
+		qmi_device_set_expected_data_format(data->dev,
+						QMI_DEVICE_EXPECTED_DATA_FORMAT_RAW_IP);
+
+		param = qmi_param_new_uint32(QMI_WDA_LL_PROTOCOL, QMI_DEVICE_EXPECTED_DATA_FORMAT_RAW_IP);
+		if (!param)
+			goto error;
+
+		if (qmi_service_send(data->wda, QMI_WDA_SET_DATA_FORMAT, param,
+						set_data_format_cb, gc, NULL) > 0)
+			return;
+
+		qmi_param_free(param);
+	} else {
+		if (qmi_service_send(data->wda, QMI_WDA_GET_DATA_FORMAT, NULL,
+						get_data_format_cb, gc, NULL) > 0)
+			return;
+	}
 
 error:
 	data->ip_family = QMI_WDS_IP_FAMILY_IPV4;

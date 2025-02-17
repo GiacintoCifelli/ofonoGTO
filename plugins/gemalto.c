@@ -2654,7 +2654,7 @@ static void set_from_model(struct gemalto_data *data) {
 		 * note: we probe for ECM/NCM even if the port is not present
 		 * (for serial connection type or serial-like)
 		 */
-		if (m == 0x53 || m == 0x60 || m == 0x63 || m == 0x6b  || m == 0x6f || m == 0x68 || m == 0x69 || m == 0x90b2)
+		if (m == 0x53 || m == 0x60 || (getenv("OFONO_QMI_ALS3X") && m == 0x61) || m == 0x63 || m == 0x6b  || m == 0x6f || m == 0x68 || m == 0x69 || m == 0x90b2)
 			data->qmi = STATE_PROBE;
 		/*these families have PPP only*/
 		else if (m != 0x58 && m != 0x47 && m != 0x54)
@@ -3153,16 +3153,16 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 		gprs = ofono_gprs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem",
 								data->app);
 
-		if (g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "2") == 0 || 
-		    g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "vzwdcus") == 0 || 
+		if (g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "2") == 0 ||
+		    g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "vzwdcus") == 0 ||
 		    g_strcmp0 (ofono_modem_get_string(modem, "Provider"), "CDMAless-Verizon") == 0)
-		{    
+		{
 			ofono_gprs_set_cid_range(gprs, 3, 3);
 			DBG("CID range: 3, 3");
-		} else {         
+		} else {
 			ofono_gprs_set_cid_range(gprs, 1, 1);
 			DBG("CID range: 1, 1");
-		}         
+		}
 
 		gc = ofono_gprs_context_create(modem, 0, "qmimodem",
 								data->qmid);

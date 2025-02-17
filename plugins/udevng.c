@@ -1213,7 +1213,7 @@ static gboolean setup_gemalto(struct modem_info* modem)
 			}
 		}
 
-		if (g_str_equal(info->subsystem,"usbmisc"))
+		if (g_str_equal(info->subsystem,"usbmisc") && (!getenv("OFONO_QMI_ALS3X") || !ctl))
 			/* control device for qmi/mbim:  /dev/cdc-wdmX */
 			ctl = info->devnode;
 
