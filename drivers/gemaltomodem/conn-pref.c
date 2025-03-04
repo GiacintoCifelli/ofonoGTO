@@ -104,6 +104,7 @@ static void gemalto_cgdcont_cb(gboolean ok, GAtResult *result,
 	g_at_result_iter_init(&iter, result);
 
 	while (g_at_result_iter_next(&iter, "+CGDCONT:")) {
+		char buf[50];
 
 		/*handle empty reponse*/
 		if (!g_at_result_iter_next_number(&iter, &cid)){
@@ -119,8 +120,6 @@ static void gemalto_cgdcont_cb(gboolean ok, GAtResult *result,
 			goto error;
 
 		DBG("element %d: cid:%d ,apn:%s, pdp_type:%s",i,cid,apn,pdp_type);
-
-		char buf[50];
 
 		snprintf(buf, sizeof(buf), "%d,%s,%s", cid, apn, pdp_type);
 
@@ -397,10 +396,11 @@ static void gemalto_set_connpref_context_profile(struct ofono_connpref *connpref
 	struct cb_data *cbd = cb_data_new(cb, data);
 	struct connpref_data *cp_data = ofono_connpref_get_data(connpref);
 	char buf[128];
+	char * pdp_type_is = NULL;
 
 	DBG("cid:%d, apn:%s,pdp type:%d", cid, apn, pdp_type);
 
-	char * pdp_type_is = gemalto_from_pdp_type_to_string(pdp_type);
+	pdp_type_is = gemalto_from_pdp_type_to_string(pdp_type);
 
 	cbd->user = cp_data;
 

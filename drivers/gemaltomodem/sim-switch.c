@@ -70,12 +70,12 @@ static void gemalto_set_active_card_slot(struct ofono_sim_switch *sm, unsigned i
 {
 	/* Type has been checked before */
 	struct sim_switch_data *smd = ofono_sim_switch_get_data(data);
+	struct cb_data *cbd = NULL;
+	gchar* cmd = NULL;
 	if (smd == NULL) {
 		ofono_error("Could not get sim switch data");
 		return;
 	}
-	struct cb_data *cbd = NULL;
-	gchar* cmd = NULL;
 
 	if (!smd->dualmode_supported) {
 		CALLBACK_WITH_FAILURE(cb, data);
@@ -95,12 +95,14 @@ static void gemalto_sim_cs_read_init_cb(gboolean success, GAtResult *result, gpo
 	const char *cs_val;
 	struct ofono_sim_switch *sm = user_data;
 	struct sim_switch_data *smd = ofono_sim_switch_get_data(sm);
+	const char* expected_prefix = NULL;
+
 	if (smd == NULL) {
 		ofono_error("Could not get sim switch data");
 		return;
 	}
-	const char* expected_prefix = (smd->use_sim_text_for_cs) ?
-	                              "^SCFG: \"SIM/CS\"," : "^SCFG: \"SIM/Cs\",";
+
+	expected_prefix = (smd->use_sim_text_for_cs) ? "^SCFG: \"SIM/CS\"," : "^SCFG: \"SIM/Cs\",";
 
 	if (success) {
 		g_at_result_iter_init(&iter, result);
