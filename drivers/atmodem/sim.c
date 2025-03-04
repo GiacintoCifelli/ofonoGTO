@@ -78,6 +78,7 @@ static const char *crla_prefix[] = { "+CRLA:", NULL };
 static const char *cgla_prefix[] = { "+CGLA:", NULL };
 static const char *cimi_prefix[] = { "+CIMI:", NULL };
 static const char *sind_prefix[] = { "^SIND:", NULL };
+static const char *csim_prefix[] = { "+CSIM:", NULL };
 static const char *none_prefix[] = { NULL };
 
 static void append_file_path(char *buf, const unsigned char *path,
@@ -261,7 +262,7 @@ static void at_crsm_read_cb(gboolean ok, GAtResult *result,
 		return;
 	}
 
-	DBG("crsm_read_cb: %02x, %02x, %d", sw1, sw2, len);
+	/*DBG("crsm_read_cb: %02x, %02x, %d", sw1, sw2, len); */
 
 	cb(&error, response, len, cbd->data);
 }
@@ -523,7 +524,7 @@ static void at_sind_euiccid_read_cb(gboolean ok, GAtResult *result, gpointer use
 		goto error;
 
 	/* euccid can be returned empty without error */
-	if (!strlen(euccid)) 
+	if (!strlen(euccid))
 		goto error;
 
 	DBG("eUICCID: %s", euccid);
@@ -2046,6 +2047,50 @@ static void at_logical_access(struct ofono_sim *sim, int session_id,
 	CALLBACK_WITH_FAILURE(cb, NULL, 0, data);
 }
 
+/* Callback method used by at_trigger_fallback and at_cancel_fallback */
+static void at_fallback_cb(gboolean ok, GAtResult *result,
+				gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	ofono_sim_lock_unlock_cb_t cb = cbd->cb;
+	struct ofono_error error;
+
+	DBG("");
+	decode_at_error(&error, g_at_result_final_response(result));
+
+	cb(&error, cbd->data);
+}
+
+static void at_trigger_fallback(struct ofono_sim *sim,
+				ofono_sim_lock_unlock_cb_t cb, void *data)
+{
+	struct sim_data *sd = ofono_sim_get_data(sim);
+	struct cb_data *cbd = cb_data_new(cb, data);
+
+	DBG("");
+	if (g_at_chat_send(sd->chat, "AT+CSIM=28,\"80C2000009D3070202018110017C\"", csim_prefix,
+				at_fallback_cb, cbd, g_free) > 0)
+		return;
+
+	g_free(cbd);
+	CALLBACK_WITH_FAILURE(cb, data);
+}
+
+static void at_cancel_fallback(struct ofono_sim *sim,
+				ofono_sim_lock_unlock_cb_t cb, void *data)
+{
+	struct sim_data *sd = ofono_sim_get_data(sim);
+	struct cb_data *cbd = cb_data_new(cb, data);
+
+	DBG("");
+	if (g_at_chat_send(sd->chat, "AT+CSIM=28,\"80C2000009D3070202018110017D\"", csim_prefix,
+				at_fallback_cb, cbd, g_free) > 0)
+		return;
+
+	g_free(cbd);
+	CALLBACK_WITH_FAILURE(cb, data);
+}
+
 static int at_sim_probe(struct ofono_sim *sim, unsigned int vendor,
 				void *data)
 {
@@ -2109,7 +2154,9 @@ static const struct ofono_sim_driver driver = {
 	.session_read_binary	= at_session_read_binary,
 	.session_read_record	= at_session_read_record,
 	.session_read_info	= at_session_read_info,
-	.logical_access		= at_logical_access
+	.logical_access		= at_logical_access,
+	.trigger_fallback	= at_trigger_fallback,
+	.cancel_fallback	= at_cancel_fallback
 };
 
 static const struct ofono_sim_driver driver_noef = {

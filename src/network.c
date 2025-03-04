@@ -79,6 +79,7 @@ struct ofono_netreg {
 	struct ofono_atom *atom;
 	unsigned int hfp_watch;
 	unsigned int spn_watch;
+	guint strength_timer;
 };
 
 struct network_operator_data {
@@ -1365,16 +1366,18 @@ static gboolean signal_strength_notify(gpointer user_data)
 	if (bIsModemShuttingDown)
 	{
 		DBG("Stopping Timer...");
-	    ofono_signal_strength_notify_flag = 0;
-	    return FALSE;
+		ofono_signal_strength_notify_flag = 0;
+		netreg->strength_timer = 0;
+		return FALSE;
 	}
 
 	if (!ofono_netreg_modem_status ||
 		( netreg_status != NETWORK_REGISTRATION_STATUS_REGISTERED &&
 	      netreg_status != NETWORK_REGISTRATION_STATUS_ROAMING)) {
-	    DBG("Stopping Timer...");
-	    ofono_signal_strength_notify_flag = 0;
-	    return FALSE;
+		DBG("Stopping Timer...");
+		ofono_signal_strength_notify_flag = 0;
+		netreg->strength_timer = 0;
+		return FALSE;
 	}
 
 	DBG("Query Signal Strength...");
@@ -1428,7 +1431,7 @@ void ofono_netreg_status_notify(struct ofono_netreg *netreg, int status,
 						signal_strength_callback, netreg);
 
 			DBG("Starting Timer...");
-			g_timeout_add_seconds(OFONO_SIGNAL_STRENGTH_TIMEOUT,
+			netreg->strength_timer = g_timeout_add_seconds(OFONO_SIGNAL_STRENGTH_TIMEOUT,
 						signal_strength_notify, netreg);
 			ofono_signal_strength_notify_flag = 1;
 		}
@@ -1912,6 +1915,12 @@ static void netreg_remove(struct ofono_atom *atom)
 
 	sim_eons_free(netreg->eons);
 	sim_spdi_free(netreg->spdi);
+
+	if (netreg->strength_timer) {
+		g_source_remove(netreg->strength_timer);
+		netreg->strength_timer = 0;
+		ofono_signal_strength_notify_flag = 0;
+	}
 
 	g_free(netreg);
 }

@@ -44,12 +44,14 @@ static int gemaltomodem_init(void)
 
 	gemalto_sim_switch_init();
 	gemalto_radio_settings_init();
+	gemalto_connpref_init();
 
 	return 0;
 }
 
 static void gemaltomodem_exit(void)
 {
+	gemalto_connpref_exit();
 	gemalto_radio_settings_exit();
 	gemalto_sim_switch_exit();
 

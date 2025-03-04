@@ -69,6 +69,8 @@
 
 #include <src/actia/sim-switch.h>
 #include <src/actia/default-properties.h>
+#include <src/actia/vendor.h>
+#include <src/actia/conn-pref.h>
 
 /* debug utilities - begin */
 
@@ -218,6 +220,7 @@ struct gemalto_data {
 	/* hardware control variables */
 	DBusMessage *hc_msg;
 	gboolean powersave;
+	gboolean is_online_ongoing;
 };
 
 /*******************************************************************************
@@ -2718,48 +2721,38 @@ static void store_cgmm(gboolean ok, GAtResult *result, gpointer user_data)
 		if (model && *model) {
 			memcpy(data->modelstr, model, sizeof(data->modelstr));
 
-			if (g_ascii_strncasecmp(model, "TC", 2) == 0)
+            if (    g_ascii_strncasecmp(model, "TC", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "MC", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "AC", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "HC", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "HM", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "XT", 2) == 0 ||
+                    g_ascii_strncasecmp(model, "AGS", 3) == 0 ||
+                    g_ascii_strncasecmp(model, "BGS", 3) == 0)
 				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "MC", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "AC", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "HC", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "HM", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "XT", 2) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "AGS", 3) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "BGS", 3) == 0)
-				data->model = 0x47;
-			else if (g_ascii_strncasecmp(model, "AH3", 3) == 0)
-				data->model = 0x55;
-			else if (g_ascii_strncasecmp(model, "AHS", 3) == 0)
-				data->model = 0x55;
-			else if (g_ascii_strncasecmp(model, "PHS", 3) == 0)
-				data->model = 0x55;
-			else if (g_ascii_strncasecmp(model, "PH8", 3) == 0)
-				data->model = 0x55;
-			else if (g_ascii_strncasecmp(model, "AHS", 3) == 0)
+			else if (g_ascii_strncasecmp(model, "AH3", 3) == 0 ||
+                     g_ascii_strncasecmp(model, "AHS", 3) == 0 ||
+				     g_ascii_strncasecmp(model, "PHS", 3) == 0 ||
+				     g_ascii_strncasecmp(model, "PH8", 3) == 0 ||
+				     g_ascii_strncasecmp(model, "AHS", 3) == 0)
 				data->model = 0x55;
 			else if (g_ascii_strncasecmp(model, "EHS", 3) == 0)
 				data->model = 0x58;
 			else if (g_ascii_strncasecmp(model, "ELS31-", 6) == 0)
 				data->model = 0xa0;
-			else if (g_ascii_strncasecmp(model, "ELS61-", 6) == 0)
-				data->model = 0x5b;
-			else if (g_ascii_strncasecmp(model, "PLS62-", 6) == 0)
-				data->model = 0x5b;
-			else if (g_ascii_strncasecmp(model, "PLS8-", 5) == 0)
-				data->model = 0x61;
-			else if (g_ascii_strncasecmp(model, "ALS3-", 5) == 0)
-				data->model = 0x61;
+			else if (g_ascii_strncasecmp(model, "ELS61-", 6) == 0 ||
+                     g_ascii_strncasecmp(model, "PLS62-", 6) == 0)
+				data->model = OFONO_VENDOR_GEMALTO_CINT_PLS62;
+			else if (g_ascii_strncasecmp(model, "PLS8-", 5) == 0 ||
+                     g_ascii_strncasecmp(model, "ALS3-", 5) == 0)
+				data->model = OFONO_VENDOR_GEMALTO_CINT_PLS8_ALS3;
 			else if (g_ascii_strncasecmp(model, "ALAS5-", 6) == 0)
-				data->model = 0x65;
-			else if (g_ascii_strncasecmp(model, "PLS83-", 6) == 0)
-				data->model = 0x66;
+				data->model = OFONO_VENDOR_GEMALTO_CINT_ALAS5;
+            else if (g_ascii_strncasecmp(model, "ALAS5V-", 7) == 0)
+				data->model = OFONO_VENDOR_GEMALTO_CINT_ALAS5V;
+			else if (g_ascii_strncasecmp(model, "PLS63-", 6) == 0 ||
+                     g_ascii_strncasecmp(model, "PLS83-", 6) == 0)
+				data->model = OFONO_VENDOR_GEMALTO_CINT_PLS63_PLS83;
 			return;
 		}
 	}
@@ -2981,6 +2974,11 @@ static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
 
 	cbd->user = modem;
 
+	if (!online && data->is_online_ongoing){
+		ofono_error("Cannot set offline, online process on going");
+		goto error;
+	}
+
 	if (data->conn == GEMALTO_CONNECTION_SERIAL) {
 		gemalto_set_online_serial(modem, online, cb, user_data);
 		return;
@@ -2993,20 +2991,15 @@ static void gemalto_set_online(struct ofono_modem *modem, ofono_bool_t online,
 	else
 		gemalto_exec_stored_cmd(modem, "set_offline");
 
-	if (g_at_chat_send(data->app, cmd, NULL, set_online_cb, cbd, g_free))
+	if (g_at_chat_send(data->app, cmd, NULL, set_online_cb, cbd, g_free)){
+		if (online)
+			data->is_online_ongoing = TRUE;
 		return;
+	}
 
+error:
 	CALLBACK_WITH_FAILURE(cb, cbd->data);
 	g_free(cbd);
-}
-
-static void gemalto_pre_sim_init_actia(struct ofono_modem *modem)
-{
-	struct gemalto_data *data = ofono_modem_get_data(modem);
-	unsigned int vendor;
-	vendor = data->model;
-	/* Create the sim switch */
-	ofono_sim_switch_create(modem, vendor, "gemaltomodem", data->app);
 }
 
 static void gemalto_retrieve_provider(gboolean success, GAtResult *result, gpointer user_data)
@@ -3036,11 +3029,27 @@ static void gemalto_retrieve_provider(gboolean success, GAtResult *result, gpoin
 static void gemalto_pre_sim(struct ofono_modem *modem)
 {
 	struct gemalto_data *data = ofono_modem_get_data(modem);
+	int vendor = OFONO_VENDOR_GEMALTO;
 
 	DBG("%p", modem);
 	gemalto_exec_stored_cmd(modem, "pre_sim");
 
-	gemalto_pre_sim_init_actia(modem);
+	if (!data) {
+		ofono_error("Unable to retrieve data from modem");
+		return;
+	}
+
+	if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS62) {
+		vendor = OFONO_VENDOR_GEMALTO_PLS62;
+	}
+	else if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS63_PLS83) {
+		vendor = OFONO_VENDOR_GEMALTO_PLS63_PLS83;
+	}
+	/* Create the sim switch */
+	ofono_sim_switch_create(modem, vendor, "gemaltomodem", data->app);
+
+	/* Create the connection preference */
+	ofono_connpref_create(modem, vendor, "gemaltomodem", data->app);
 
 	/* Retrieve Provider used by LTE and for the cid range */
 	g_at_chat_send(data->app, "AT^SCFG=\"MEopMode/Prov/Cfg\"", scfg_prefix,
@@ -3119,6 +3128,7 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 	struct ofono_message_waiting *mw;
 	struct ofono_gprs *gprs = NULL;
 	struct ofono_gprs_context *gc = NULL;
+	int vendor;
 
 	data->autoattach = FALSE;
 	ofono_modem_set_integer(modem, "GemaltoAutoAttach", 0);
@@ -3182,7 +3192,7 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 			/* limitation: same APN as for attach */
 			ofono_gprs_set_cid_range(gprs, 1, 11);
 		else
-			ofono_gprs_set_cid_range(gprs, 4, 16);
+			ofono_gprs_set_cid_range(gprs, 6, 15);
 
 		if (data->gprs_opt == USE_CTX3 || data->model == 0x5b)
 			gc = ofono_gprs_context_create(modem, 0, "gemaltomodemswwanblocking", data->app);
@@ -3250,11 +3260,21 @@ static void autoattach_probe_and_continue(gboolean ok, GAtResult *result,
 	if (mw)
 		ofono_message_waiting_register(mw);
 
-	data->netreg = ofono_netreg_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
+	vendor = OFONO_VENDOR_GEMALTO;
+	if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS8_ALS3)
+		vendor = OFONO_VENDOR_GEMALTO_PLS8;
+	else if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS62)
+		vendor = OFONO_VENDOR_GEMALTO_PLS62;
+	else if(data->model == OFONO_VENDOR_GEMALTO_CINT_PLS63_PLS83)
+		vendor = OFONO_VENDOR_GEMALTO_PLS63_PLS83;
+
+	data->netreg = ofono_netreg_create(modem, vendor, "atmodem", data->app);
 
 	ofono_cbs_create(modem, OFONO_VENDOR_GEMALTO, "atmodem", data->app);
 
-	ofono_radio_settings_create(modem, OFONO_VENDOR_GEMALTO, "gemaltomodem", data->app);
+	ofono_radio_settings_create(modem, vendor, "gemaltomodem", data->app);
+
+	data->is_online_ongoing = FALSE;	//Online finish
 }
 
 static void sw_reset_cb(gboolean ok, GAtResult *result, gpointer user_data)

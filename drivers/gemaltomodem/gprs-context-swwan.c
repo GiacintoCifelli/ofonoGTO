@@ -212,7 +212,8 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 	struct ofono_gprs_context *gc = user_data;
 	struct gprs_context_data *gcd = ofono_gprs_context_get_data(gc);
 	const char *event;
-	int cid;
+	unsigned int cid;
+	int cid_int;
 	GAtResultIter iter;
 
 	if(!gcd)
@@ -244,8 +245,14 @@ static void cgev_notify(GAtResult *result, gpointer user_data)
 	if (!g_at_result_iter_skip_next(&iter)) // "DEACT"
 		return;
 
-	if (!g_at_result_iter_next_number(&iter, &cid))
+	if (!g_at_result_iter_next_number(&iter, &cid_int))
 		return;
+
+	if (cid_int < 0) {
+		ofono_error("Invalid cid retrieved (%d)", cid_int);
+		return;
+	}
+	cid = (unsigned int)cid_int;
 
 deactivate:
 	DBG("cid %d", cid);

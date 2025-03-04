@@ -1140,6 +1140,57 @@ static DBusMessage *sim_reset_pin(DBusConnection *conn, DBusMessage *msg,
 	return NULL;
 }
 
+static void sim_fallback_cb(const struct ofono_error *error, void *data)
+{
+	struct ofono_sim *sim = data;
+
+	DBG("");
+	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
+		__ofono_dbus_pending_reply(&sim->pending,
+				__ofono_error_failed(sim->pending));
+		return;
+	}
+
+	__ofono_dbus_pending_reply(&sim->pending,
+				dbus_message_new_method_return(sim->pending));
+}
+
+static DBusMessage *sim_trigger_fallback(DBusConnection *conn, DBusMessage *msg,
+					void *data)
+{
+	struct ofono_sim *sim = data;
+
+	DBG("");
+	if (sim->driver->trigger_fallback == NULL)
+		return __ofono_error_not_implemented(msg);
+
+	if (sim->pending)
+		return __ofono_error_busy(msg);
+
+	sim->pending = dbus_message_ref(msg);
+	sim->driver->trigger_fallback(sim, sim_fallback_cb, sim);
+
+	return NULL;
+}
+
+static DBusMessage *sim_cancel_fallback(DBusConnection *conn, DBusMessage *msg,
+					void *data)
+{
+	struct ofono_sim *sim = data;
+
+	DBG("");
+	if (sim->driver->cancel_fallback == NULL)
+		return __ofono_error_not_implemented(msg);
+
+	if (sim->pending)
+		return __ofono_error_busy(msg);
+
+	sim->pending = dbus_message_ref(msg);
+	sim->driver->cancel_fallback(sim, sim_fallback_cb, sim);
+
+	return NULL;
+}
+
 static const GDBusMethodTable sim_methods[] = {
 	{ GDBUS_METHOD("GetProperties",
 			NULL, GDBUS_ARGS({ "properties", "a{sv}" }),
@@ -1168,6 +1219,12 @@ static const GDBusMethodTable sim_methods[] = {
 			GDBUS_ARGS({ "id", "y" }),
 			GDBUS_ARGS({ "icon", "ay" }),
 			sim_get_icon) },
+	{ GDBUS_ASYNC_METHOD("TriggerFallback",
+			NULL, NULL,
+			sim_trigger_fallback) },
+	{ GDBUS_ASYNC_METHOD("CancelFallback",
+			NULL, NULL,
+			sim_cancel_fallback) },
 	{ }
 };
 

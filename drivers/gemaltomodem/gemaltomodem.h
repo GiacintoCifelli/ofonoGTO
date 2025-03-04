@@ -47,3 +47,6 @@ extern void gemalto_sim_switch_exit(void);
 
 extern void gemalto_radio_settings_init(void);
 extern void gemalto_radio_settings_exit(void);
+
+extern void gemalto_connpref_init(void);
+extern void gemalto_connpref_exit(void);

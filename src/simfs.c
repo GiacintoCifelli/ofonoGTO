@@ -396,8 +396,8 @@ static void sim_fs_op_read_block_cb(const struct ofono_error *error,
 		tocopy = MIN(256, op->num_bytes - op->current * 256);
 	}
 
-	DBG("bufoff: %d, dataoff: %d, tocopy: %d",
-				bufoff, dataoff, tocopy);
+	/*DBG("bufoff: %d, dataoff: %d, tocopy: %d",
+				bufoff, dataoff, tocopy); */
 
 	memcpy(op->buffer + bufoff, data + dataoff, tocopy);
 	cache_block(fs, op->current, 256, data, len);
