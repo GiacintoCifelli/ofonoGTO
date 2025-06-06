@@ -7001,7 +7001,7 @@ static struct send_sms_test send_sms_data_141 = {
 			.ud = "Two types are defined: - A short message to be "
 				"sent to the network in an SMS-SUBMIT message, "
 				"or an SMS-COMMAND message, where the user "
-				"data can be passed transp"
+				"data can be passed trans"
 		} }
 	}
 };
@@ -7031,7 +7031,7 @@ static struct send_sms_test send_sms_data_151 = {
 			.ud = "Two types are defined: - A short message to be "
 				"sent to the network in an SMS-SUBMIT message, "
 				"or an SMS-COMMAND message, where the user "
-				"data can be passed transp"
+				"data can be passed trans"
 		} }
 	}
 };
