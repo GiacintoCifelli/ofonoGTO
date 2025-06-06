@@ -63,7 +63,8 @@ int ril_protocol_string_to_ofono_protocol(gchar *protocol_str)
 const char *ril_error_to_string(int error)
 {
 	switch (error) {
-	case RIL_E_SUCCESS: return "SUCCESS";
+#include "ril_errstr_incl.c"
+/*	case RIL_E_SUCCESS: return "SUCCESS";
 	case RIL_E_RADIO_NOT_AVAILABLE: return "RADIO_NOT_AVAILABLE";
 	case RIL_E_GENERIC_FAILURE: return "GENERIC_FAILURE";
 	case RIL_E_PASSWORD_INCORRECT: return "PASSWORD_INCORRECT";
@@ -92,7 +93,7 @@ const char *ril_error_to_string(int error)
 	case RIL_E_SS_MODIFIED_TO_USSD: return "SS_MODIFIED_TO_USSD";
 	case RIL_E_SS_MODIFIED_TO_SS: return "SS_MODIFIED_TO_SS";
 	case RIL_E_SUBSCRIPTION_NOT_SUPPORTED:
-		return "SUBSCRIPTION_NOT_SUPPORTED";
+		return "SUBSCRIPTION_NOT_SUPPORTED"; */
 	default: return "<unknown errno>";
 	}
 }

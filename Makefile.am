@@ -181,6 +181,9 @@ builtin_sources += plugins/ril.c plugins/ril.h
 builtin_modules += infineon
 builtin_sources += plugins/infineon.c
 
+builtin_modules += kril
+builtin_sources += plugins/kril.c
+
 builtin_modules += ril_intel
 builtin_sources += plugins/ril_intel.c
 

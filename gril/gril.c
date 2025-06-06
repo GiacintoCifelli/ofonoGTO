@@ -35,6 +35,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #include <glib.h>
 
@@ -794,9 +795,7 @@ static gboolean node_compare_by_group(struct ril_notify_node *node,
 	return FALSE;
 }
 
-static struct ril_s *create_ril(const char *sock_path, unsigned int uid,
-					unsigned int gid)
-
+static struct ril_s *create_ril(const char *sock_path, unsigned int uid, unsigned int gid)
 {
 	struct ril_s *ril;
 	struct sockaddr_un addr;
@@ -892,6 +891,99 @@ static struct ril_s *create_ril(const char *sock_path, unsigned int uid,
 							g_free,
 							ril_notify_destroy);
 
+	g_ril_io_set_read_handler(ril->io, new_bytes, ril);
+
+	return ril;
+
+error:
+	ril_unref(ril);
+
+	return NULL;
+}
+
+static struct ril_s *create_ril_ip(const char *ip_addr, unsigned int port)
+{
+	struct sockaddr_in server_addr;
+	int sk;
+	struct ril_s *ril;
+	GIOChannel *io;
+
+	ril = g_try_new0(struct ril_s, 1);
+	if (ril == NULL)
+		return ril;
+
+	ril->ref_count = 1;
+	ril->next_cmd_id = 1;
+	ril->next_notify_id = 1;
+	ril->next_gid = 0;
+	ril->req_bytes_written = 0;
+	ril->trace = FALSE;
+
+	/* ip_addr is allowed to be NULL for unit tests */
+	if (ip_addr == NULL || port==0)
+		return ril;
+
+	/* Create an IPv4 socket */
+	sk = socket(AF_INET, SOCK_STREAM, 0);
+	if (sk < 0) {
+		ofono_error("create_ril: can't create inet socket: %s (%d)\n", strerror(errno), errno);
+		goto error;
+	}
+
+	/* Set up the server address structure */
+	memset(&server_addr, 0, sizeof(server_addr));
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(port);
+
+	/* Convert the ip_addr (IP address) to binary form */
+	if (inet_pton(AF_INET, ip_addr, &server_addr.sin_addr) <= 0) {
+		ofono_error("create_ril: Invalid IP address: %s\n", ip_addr);
+		close(sk);
+		goto error;
+	}
+
+	/* Connect to the server */
+	if (connect(sk, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+		ofono_error("Connection failed to %s:%d: %s\n", ip_addr, port, strerror(errno));
+		close(sk);
+		return NULL;
+	}
+
+	io = g_io_channel_unix_new(sk);
+	if (io == NULL) {
+		ofono_error("create_ril: can't open RILD io channel: %s (%d)\n", strerror(errno), errno);
+		goto error;
+	}
+
+	g_io_channel_set_close_on_unref(io, TRUE);
+	g_io_channel_set_flags(io, G_IO_FLAG_NONBLOCK, NULL);
+
+	ril->io = g_ril_io_new(io);
+	g_io_channel_unref(io);
+
+	if (ril->io == NULL) {
+		ofono_error("create_ril: can't create ril->io");
+		goto error;
+	}
+
+	g_ril_io_set_disconnect_function(ril->io, io_disconnect, ril);
+
+	ril->command_queue = g_queue_new();
+	if (ril->command_queue == NULL) {
+		ofono_error("create_ril: Couldn't create command_queue.");
+		goto error;
+	}
+
+	ril->out_queue = g_queue_new();
+	if (ril->out_queue == NULL) {
+		ofono_error("create_ril: Couldn't create out_queue.");
+		goto error;
+	}
+
+	ril->notify_list = g_hash_table_new_full(g_int_hash, g_int_equal,
+							g_free,
+							ril_notify_destroy);
+	DBG("%p", ril->notify_list);
 	g_ril_io_set_read_handler(ril->io, new_bytes, ril);
 
 	return ril;
@@ -1061,6 +1153,28 @@ GRil *g_ril_new_with_ucred(const char *sock_path, enum ofono_ril_vendor vendor,
 		return NULL;
 
 	ril->parent = create_ril(sock_path, uid, gid);
+	if (ril->parent == NULL) {
+		g_free(ril);
+		return NULL;
+	}
+
+	ril->group = ril->parent->next_gid++;
+	ril->ref_count = 1;
+
+	ril->parent->vendor = vendor;
+
+	return ril;
+}
+
+GRil *g_ril_new_with_ip(const char *ip_addr, unsigned int port, enum ofono_ril_vendor vendor)
+{
+	GRil *ril;
+
+	ril = g_try_new0(GRil, 1);
+	if (ril == NULL)
+		return NULL;
+
+	ril->parent = create_ril_ip(ip_addr, port);
 	if (ril->parent == NULL) {
 		g_free(ril);
 		return NULL;
