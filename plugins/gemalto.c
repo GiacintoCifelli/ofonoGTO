@@ -1892,6 +1892,7 @@ static void gemalto_ciev_simstatus_notify(GAtResultIter *iter, struct ofono_mode
 	}
 }
 
+#if 0
 static void gemalto_ciev_nitz_notify(GAtResultIter *iter,
 					struct ofono_modem *modem)
 {
@@ -1911,13 +1912,34 @@ static void gemalto_ciev_nitz_notify(GAtResultIter *iter,
 	gemalto_signal(GEMALTO_NITZ_TIME_INTERFACE, "NitzUpdated", nitz_data,
 									modem);
 }
+#endif
+
+// andriipe: added by Hans-Cristoph patch sim_refresh.patch
+static void gemalto_ciev_iccid_notify(GAtResultIter *iter, struct ofono_modem *modem)
+{
+	struct gemalto_data *data = ofono_modem_get_data(modem);
+	struct ofono_sim *sim = data->sim;
+	const char *iccid;
+
+	if (!g_at_result_iter_next_string(iter, &iccid))
+		return;
+
+	if (g_str_equal(iccid,"")){
+		DBG("SIM removed");
+		ofono_sim_inserted_notify(sim, FALSE);
+	} else {
+		DBG("Refreshing ICCID");
+		ofono_sim_inserted_notify(sim, TRUE);
+	}
+}
 
 static void gemalto_ciev_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_modem *modem = user_data;
 
 	const char *sim_status = "simstatus";
-	const char *nitz_status = "nitz";
+//	const char *nitz_status = "nitz";
+	const char *iccid_status = "iccid";
 	const char *ind_str;
 	GAtResultIter iter;
 
@@ -1932,8 +1954,8 @@ static void gemalto_ciev_notify(GAtResult *result, gpointer user_data)
 
 	if (g_str_equal(sim_status, ind_str)) {
 		gemalto_ciev_simstatus_notify(&iter, modem);
-	} else if (g_str_equal(nitz_status, ind_str)) {
-		gemalto_ciev_nitz_notify(&iter, modem);
+	} else if (g_str_equal(iccid_status, ind_str)) {
+		gemalto_ciev_iccid_notify(&iter, modem);
 	}
 }
 
@@ -1960,9 +1982,8 @@ static void sim_state_cb(gboolean present, gpointer user_data)
 	g_at_chat_register(data->app, "+PBREADY",
 			gemalto_pbready_notify, FALSE, modem, NULL);
 
-	g_at_chat_send(data->app, "AT^SIND=\"simstatus\",1", none_prefix,
-			NULL, NULL, NULL);
-	g_at_chat_send(data->app, "AT^SIND=\"nitz\",1", none_prefix,
+	/* Turn ON iccid change indication */
+	g_at_chat_send(data->app, "AT^SIND=\"iccid\",1", none_prefix,
 			NULL, NULL, NULL);
 }
 
