@@ -1892,7 +1892,6 @@ static void gemalto_ciev_simstatus_notify(GAtResultIter *iter, struct ofono_mode
 	}
 }
 
-#if 0
 static void gemalto_ciev_nitz_notify(GAtResultIter *iter,
 					struct ofono_modem *modem)
 {
@@ -1912,7 +1911,6 @@ static void gemalto_ciev_nitz_notify(GAtResultIter *iter,
 	gemalto_signal(GEMALTO_NITZ_TIME_INTERFACE, "NitzUpdated", nitz_data,
 									modem);
 }
-#endif
 
 // andriipe: added by Hans-Cristoph patch sim_refresh.patch
 static void gemalto_ciev_iccid_notify(GAtResultIter *iter, struct ofono_modem *modem)
@@ -1938,7 +1936,7 @@ static void gemalto_ciev_notify(GAtResult *result, gpointer user_data)
 	struct ofono_modem *modem = user_data;
 
 	const char *sim_status = "simstatus";
-//	const char *nitz_status = "nitz";
+	const char *nitz_status = "nitz";
 	const char *iccid_status = "iccid";
 	const char *ind_str;
 	GAtResultIter iter;
@@ -1954,6 +1952,8 @@ static void gemalto_ciev_notify(GAtResult *result, gpointer user_data)
 
 	if (g_str_equal(sim_status, ind_str)) {
 		gemalto_ciev_simstatus_notify(&iter, modem);
+	} else if (g_str_equal(nitz_status, ind_str)) {
+		gemalto_ciev_nitz_notify(&iter, modem);
 	} else if (g_str_equal(iccid_status, ind_str)) {
 		gemalto_ciev_iccid_notify(&iter, modem);
 	}
