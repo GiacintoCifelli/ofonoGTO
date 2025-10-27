@@ -81,6 +81,9 @@ static const char *sind_prefix[] = { "^SIND:", NULL };
 static const char *csim_prefix[] = { "+CSIM:", NULL };
 static const char *none_prefix[] = { NULL };
 
+static void at_read_simstatus(struct ofono_sim *sim, ofono_sim_status_cb_t cb,
+                void *data);
+
 static void append_file_path(char *buf, const unsigned char *path,
 		unsigned int path_len)
 {
@@ -549,6 +552,50 @@ static void at_read_euiccid(struct ofono_sim *sim, ofono_sim_euiccid_cb_t cb,
 
 	g_free(cbd);
 	CALLBACK_WITH_FAILURE(cb, NULL, data);
+}
+
+static void at_sind_simstatus_read_cb(gboolean ok, GAtResult *result, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	GAtResultIter iter;
+	ofono_sim_status_cb_t cb = cbd->cb;
+	struct ofono_error error;
+	gint sim_stat;
+
+	decode_at_error(&error, g_at_result_final_response(result));
+	if (!ok) {
+		goto retry;
+	}
+
+	g_at_result_iter_init(&iter, result);
+	if (!g_at_result_iter_next(&iter, "^SIND: simstatus,"))
+		goto retry;
+
+	/* Skip mode since we are not interested in this */
+	if (!g_at_result_iter_skip_next(&iter))
+		goto retry;
+
+	if (!g_at_result_iter_next_number(&iter, &sim_stat))
+		goto retry;
+
+	cb(sim_stat, cbd->data); // Notify sim about status change => Ready
+	return;
+
+retry:
+	DBG("simstatus reported %d, doing retry", sim_stat);
+}
+
+static void at_read_simstatus(struct ofono_sim *sim, ofono_sim_status_cb_t cb,
+                void *data)
+{
+	struct sim_data *sd = ofono_sim_get_data(sim);
+	struct cb_data *cbd = cb_data_new(cb, data);
+
+	if(g_at_chat_send(sd->chat, "AT^SIND=\"simstatus\",1", sind_prefix,
+				at_sind_simstatus_read_cb, cbd, NULL) > 0)
+        	return;
+
+	g_free(cbd);
 }
 
 static struct {
@@ -2141,6 +2188,7 @@ static const struct ofono_sim_driver driver = {
 	.write_file_cyclic	= at_sim_update_cyclic,
 	.read_imsi		= at_read_imsi,
 	.read_euiccid		= at_read_euiccid,
+	.read_simstatus  	= at_read_simstatus,
 	.query_passwd_state	= at_pin_query,
 	.query_pin_retries	= at_pin_retries_query,
 	.send_passwd		= at_pin_send,

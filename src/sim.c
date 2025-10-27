@@ -140,6 +140,7 @@ struct ofono_sim {
 	bool sdn_ready : 1;
 	bool initialized : 1;
 	bool wait_initialized : 1;
+	bool simstatus_ready : 1;
 };
 
 struct msisdn_set_request {
@@ -174,6 +175,7 @@ static const char *const passwd_name[] = {
 };
 
 static void sim_own_numbers_update(struct ofono_sim *sim);
+static void sim_initialize(struct ofono_sim *sim);
 
 static GSList *g_drivers = NULL;
 
@@ -1747,6 +1749,22 @@ static void  sim_retrieve_euiccid(struct ofono_sim *sim)
 		sim->driver->read_euiccid(sim, sim_euiccid_cb, sim);
 }
 
+static void sim_simstatus_cb(int simstatus, void *data)
+{
+	struct ofono_sim *sim = data;
+	DBG("ret : %d", simstatus);
+	if(simstatus >= 5)
+	{
+		sim->simstatus_ready = true;
+	}
+}
+
+static void  sim_retrieve_simstatus(struct ofono_sim *sim)
+{
+	if (sim->driver->read_simstatus)
+        	sim->driver->read_simstatus(sim, sim_simstatus_cb, sim);
+}
+
 static void sim_fdn_enabled(struct ofono_sim *sim)
 {
 	DBusConnection *conn = ofono_dbus_get_connection();
@@ -2267,13 +2285,25 @@ static void sim_iccid_read_cb(int ok, int length, int record,
 	const char *path = __ofono_atom_get_path(sim->atom);
 	DBusConnection *conn = ofono_dbus_get_connection();
 	char iccid[21]; /* ICCID max length is 20 + 1 for NULL */
+	static char read_retry = 0;
 
 	if (!ok || length < 10)
+	{
+		if(read_retry == 0) /* retry iccid read second time */
+		{
+			ofono_sim_read(sim->early_context, SIM_EF_ICCID_FILEID,
+				OFONO_SIM_FILE_STRUCTURE_TRANSPARENT,
+				sim_iccid_read_cb, sim);
+		}
+		read_retry = 1;
 		return;
+	}
 
 	extract_bcd_number(data, length, iccid);
 	iccid[20] = '\0';
 	sim->iccid = g_strdup(iccid);
+
+	DBG("iccid update: %s", iccid);
 
 	ofono_dbus_signal_property_changed(conn, path,
 						OFONO_SIM_MANAGER_INTERFACE,
@@ -2322,6 +2352,14 @@ static void sim_efli_efpl_changed(int id, void *userdata)
 			sim_efpl_read_cb, sim);
 }
 
+static gboolean sim_initialize_retry(gpointer userdata)
+{
+    struct ofono_sim *sim = userdata;
+    DBG("");
+    sim_initialize(sim);
+    return FALSE; // don't call automatically again
+}
+
 static void sim_initialize(struct ofono_sim *sim)
 {
 	/*
@@ -2352,6 +2390,19 @@ static void sim_initialize(struct ofono_sim *sim)
 
 	if (sim->early_context == NULL)
 		sim->early_context = ofono_sim_context_create(sim);
+
+	if (!sim->simstatus_ready)
+	{
+		DBG("Checking sim status");
+		sim_retrieve_simstatus(sim);
+		// Retry sim_initialize() in 3 seconds and check simstatus again
+		g_timeout_add_seconds(3, sim_initialize_retry, sim);
+		return;
+	}
+	else
+	{
+		DBG("simstatus is ready, go with initialize");
+	}
 
 	/* Grab the EFiccid which is always available */
 	ofono_sim_read(sim->early_context, SIM_EF_ICCID_FILEID,
@@ -2722,6 +2773,7 @@ static void sim_free_main_state(struct ofono_sim *sim)
 
 	sim->initialized = false;
 	sim->wait_initialized = false;
+	sim->simstatus_ready = false;
 }
 
 static void sim_free_state(struct ofono_sim *sim)
@@ -2816,12 +2868,15 @@ void ofono_sim_inserted_notify(struct ofono_sim *sim, ofono_bool_t inserted)
 		return;
 	}
 
-	if (inserted == TRUE && sim->state == OFONO_SIM_STATE_NOT_PRESENT)
+	if (inserted == TRUE && (sim->state == OFONO_SIM_STATE_NOT_PRESENT || sim->state == OFONO_SIM_STATE_READY))
 		sim->state = OFONO_SIM_STATE_INSERTED;
 	else if (inserted == FALSE && sim->state != OFONO_SIM_STATE_NOT_PRESENT)
 		sim->state = OFONO_SIM_STATE_NOT_PRESENT;
 	else
+	{
+		DBG("skipping sim status update, prev st: %d", sim->state);
 		return;
+	}
 
 	if (!__ofono_atom_get_registered(sim->atom))
 		return;
