@@ -361,7 +361,7 @@ static void set_sca(struct ofono_sms *sms,
 		return;
 
 	sms->sca.type = sca->type;
-	strncpy(sms->sca.number, sca->number, OFONO_MAX_PHONE_NUMBER_LENGTH);
+	memcpy(sms->sca.number, sca->number, OFONO_MAX_PHONE_NUMBER_LENGTH);
 	sms->sca.number[OFONO_MAX_PHONE_NUMBER_LENGTH] = '\0';
 
 	value = phone_number_to_string(&sms->sca);

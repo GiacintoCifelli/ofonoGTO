@@ -2655,7 +2655,7 @@ static unsigned short codepoint_lookup(struct codepoint *key,
 					const struct codepoint *table,
 					unsigned int len)
 {
-	struct codepoint *result = NULL;
+	const struct codepoint * result = NULL;
 
 	result = bsearch(key, table, len, sizeof(struct codepoint),
 				compare_codepoints);
@@ -3739,7 +3739,6 @@ unsigned char *convert_ucs2_to_gsm_with_lang(const unsigned char *text,
 					enum gsm_dialect single_lang)
 {
 	struct conversion_table t;
-	long nchars = 0;
 	const unsigned char *in;
 	unsigned char *out;
 	unsigned char *res = NULL;
@@ -3775,7 +3774,6 @@ unsigned char *convert_ucs2_to_gsm_with_lang(const unsigned char *text,
 		else
 			res_len += 1;
 
-		nchars += 1;
 	}
 
 	res = g_try_malloc(res_len + (terminator ? 1 : 0));
