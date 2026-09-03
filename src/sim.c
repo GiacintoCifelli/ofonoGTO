@@ -1753,6 +1753,10 @@ static void sim_simstatus_cb(int simstatus, void *data)
 {
 	struct ofono_sim *sim = data;
 	DBG("ret : %d", simstatus);
+	if(simstatus == 3)
+	{
+		__ofono_sim_recheck_pin(sim);
+	}
 	if(simstatus >= 5)
 	{
 		sim->simstatus_ready = true;
